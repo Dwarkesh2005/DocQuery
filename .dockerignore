@@ -1,0 +1,16 @@
+node_modules
+npm-debug.log
+.git
+.gitignore
+.env
+.env.*
+.local
+docs
+tests
+coverage
+*.md
+.vscode
+.idea
+Thumbs.db
+.DS_Store
+docker-compose.yml

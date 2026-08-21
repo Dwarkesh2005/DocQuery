@@ -1,6 +1,7 @@
 const { AppError, ValidationError } = require('../utils/errors');
 const { env } = require('../config/env');
 const { Prisma } = require('@prisma/client');
+const { logger } = require('../config/logger');
 
 // ============================================================
 // Centralized Error Handling Middleware
@@ -98,7 +99,7 @@ function errorHandler(err, _req, res, _next) {
   // ── Unknown / Unhandled Errors ──
   // Log full details server-side, return generic message to client
   if (env.NODE_ENV !== 'test') {
-    console.error('Unhandled error:', err);
+    logger.error({ err, requestId: _req.id }, 'Unhandled error');
   }
 
   return res.status(500).json({

@@ -11,6 +11,7 @@ dist/
 
 # Private / Interview Handbooks
 .local/
+generate-handbook-pdf.js
 
 # IDE
 .vscode/

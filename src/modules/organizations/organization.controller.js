@@ -25,11 +25,11 @@ async function create(req, res, next) {
  */
 async function list(req, res, next) {
   try {
-    const organizations = await organizationService.listForUser(req.user.id);
+    const result = await organizationService.listForUser(req.user.id, req.query);
 
     res.status(200).json({
       success: true,
-      data: { organizations },
+      data: result,
     });
   } catch (error) {
     next(error);

@@ -83,6 +83,7 @@ model OrganizationMember {
   @@unique([userId, organizationId])
   @@index([organizationId])
   @@index([userId])
+  @@index([organizationId, role])
   @@map("organization_members")
 }
 
@@ -105,5 +106,6 @@ model RefreshToken {
 
   @@index([userId])
   @@index([token])
+  @@index([userId, revoked])
   @@map("refresh_tokens")
 }

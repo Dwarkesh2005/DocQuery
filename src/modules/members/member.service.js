@@ -5,33 +5,69 @@ const {
   ForbiddenError,
   BadRequestError,
 } = require('../../utils/errors');
+const redisService = require('../../services/redis.service');
+const { enqueueAuditEvent, enqueueNotification } = require('../../services/queue.service');
+const { parsePaginationParams, buildOffsetPagination } = require('../../utils/pagination');
 
 // ============================================================
 // Member Service — Business Logic Layer
 // ============================================================
 
+const CACHE_TTL = 300; // 5 minutes
+
+/**
+ * Build a cache key for member data within an organization.
+ */
+function memberCacheKey(organizationId, suffix = '') {
+  return redisService.buildKey('cache', 'members', organizationId, suffix);
+}
+
+/**
+ * Invalidate member-related caches for an organization.
+ */
+async function invalidateMemberCache(organizationId) {
+  await redisService.delPattern(redisService.buildKey('cache', 'members', organizationId, '*'));
+}
+
 /**
  * List all members of an organization.
  * Caller must already be verified as a member (via resolveOrganization).
+ * Supports offset-based pagination.
  *
  * @param {string} organizationId
+ * @param {object} [query] — req.query for pagination
  */
-async function listMembers(organizationId) {
-  const members = await prisma.organizationMember.findMany({
-    where: { organizationId },
-    include: {
-      user: {
-        select: {
-          id: true,
-          email: true,
-          name: true,
+async function listMembers(organizationId, query = {}) {
+  const { limit, page } = parsePaginationParams(query);
+
+  // Try cache for page 1 default limit
+  if (page === 1 && limit === 20) {
+    const cached = await redisService.get(memberCacheKey(organizationId, 'list'));
+    if (cached) return cached;
+  }
+
+  const skip = (page - 1) * limit;
+
+  const [members, total] = await Promise.all([
+    prisma.organizationMember.findMany({
+      where: { organizationId },
+      include: {
+        user: {
+          select: {
+            id: true,
+            email: true,
+            name: true,
+          },
         },
       },
-    },
-    orderBy: { createdAt: 'asc' },
-  });
+      orderBy: { createdAt: 'asc' },
+      skip,
+      take: limit,
+    }),
+    prisma.organizationMember.count({ where: { organizationId } }),
+  ]);
 
-  return members.map((m) => ({
+  const memberList = members.map((m) => ({
     id: m.id,
     userId: m.user.id,
     email: m.user.email,
@@ -39,6 +75,18 @@ async function listMembers(organizationId) {
     role: m.role,
     joinedAt: m.createdAt,
   }));
+
+  const result = {
+    members: memberList,
+    pagination: buildOffsetPagination(total, page, limit),
+  };
+
+  // Cache first page
+  if (page === 1 && limit === 20) {
+    await redisService.set(memberCacheKey(organizationId, 'list'), result, CACHE_TTL);
+  }
+
+  return result;
 }
 
 /**
@@ -96,6 +144,24 @@ async function addMember(organizationId, { email, role }) {
         },
       },
     },
+  });
+
+  // Invalidate caches
+  await invalidateMemberCache(organizationId);
+  // Also invalidate the new member's org list cache
+  await redisService.delPattern(redisService.buildKey('cache', 'org', targetUser.id, '*'));
+
+  // Enqueue background jobs (non-blocking)
+  enqueueAuditEvent({
+    action: 'member.added',
+    userId: targetUser.id,
+    organizationId,
+    details: { email, role },
+  });
+  enqueueNotification({
+    type: 'member.invited',
+    userId: targetUser.id,
+    payload: { organizationId, role },
   });
 
   return {
@@ -184,6 +250,18 @@ async function updateMemberRole(organizationId, targetUserId, { role }, actingUs
     },
   });
 
+  // Invalidate caches
+  await invalidateMemberCache(organizationId);
+  await redisService.delPattern(redisService.buildKey('cache', 'org', targetUserId, '*'));
+
+  // Audit event
+  enqueueAuditEvent({
+    action: 'member.role_updated',
+    userId: actingUser.userId,
+    organizationId,
+    details: { targetUserId, oldRole: targetMembership.role, newRole: role },
+  });
+
   return {
     id: updated.id,
     userId: updated.user.id,
@@ -249,6 +327,18 @@ async function removeMember(organizationId, targetUserId, actingUser) {
   // 4. Delete membership
   await prisma.organizationMember.delete({
     where: { id: targetMembership.id },
+  });
+
+  // Invalidate caches
+  await invalidateMemberCache(organizationId);
+  await redisService.delPattern(redisService.buildKey('cache', 'org', targetUserId, '*'));
+
+  // Audit event
+  enqueueAuditEvent({
+    action: 'member.removed',
+    userId: actingUser.userId,
+    organizationId,
+    details: { targetUserId, role: targetMembership.role },
   });
 }
 

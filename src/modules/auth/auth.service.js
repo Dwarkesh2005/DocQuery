@@ -13,6 +13,7 @@ const {
   NotFoundError,
 } = require('../../utils/errors');
 const crypto = require('crypto');
+const redisService = require('../../services/redis.service');
 
 // ============================================================
 // Auth Service — Business Logic Layer
@@ -239,6 +240,11 @@ async function logout({ refreshToken }) {
  * @param {string} userId
  */
 async function getCurrentUser(userId) {
+  // Try cache first
+  const cacheKey = redisService.buildKey('cache', 'user', userId, 'me');
+  const cached = await redisService.get(cacheKey);
+  if (cached) return cached;
+
   const user = await prisma.user.findUnique({
     where: { id: userId },
     include: {
@@ -259,7 +265,7 @@ async function getCurrentUser(userId) {
     throw new NotFoundError('User not found', 'USER_NOT_FOUND');
   }
 
-  return {
+  const result = {
     id: user.id,
     email: user.email,
     name: user.name,
@@ -272,6 +278,11 @@ async function getCurrentUser(userId) {
       joinedAt: m.createdAt,
     })),
   };
+
+  // Cache for 5 minutes
+  await redisService.set(cacheKey, result, 300);
+
+  return result;
 }
 
 module.exports = {

@@ -1,5 +1,9 @@
 const { env } = require('./config/env');
 const { prisma } = require('./config/database');
+const { logger } = require('./config/logger');
+const { getRedisClient, disconnectRedis, isRedisReady } = require('./config/redis');
+const { closeQueues } = require('./config/queue.config');
+const { registerShutdownHandlers } = require('./utils/shutdown');
 const app = require('./app');
 
 // ============================================================
@@ -7,41 +11,51 @@ const app = require('./app');
 // ============================================================
 
 const server = app.listen(env.PORT, () => {
-  console.log(`🚀 DocQuery API running on port ${env.PORT}`);
-  console.log(`📝 Environment: ${env.NODE_ENV}`);
-  console.log(`🔗 Health check: http://localhost:${env.PORT}/health`);
+  logger.info({
+    port: env.PORT,
+    env: env.NODE_ENV,
+    healthCheck: `http://localhost:${env.PORT}/health`,
+    docs: env.NODE_ENV !== 'production' ? `http://localhost:${env.PORT}/api/docs` : undefined,
+  }, '🚀 DocQuery API started');
 });
 
-// ============================================================
-// Graceful Shutdown
-// ============================================================
-
-async function gracefulShutdown(signal) {
-  console.log(`\n${signal} received. Starting graceful shutdown...`);
-
-  server.close(async () => {
-    console.log('HTTP server closed.');
-
-    await prisma.$disconnect();
-    console.log('Database connection closed.');
-
-    process.exit(0);
-  });
-
-  // Force shutdown after 10s
-  setTimeout(() => {
-    console.error('Forced shutdown after timeout.');
-    process.exit(1);
-  }, 10000);
+// ── Initialize Redis (non-blocking) ──
+try {
+  getRedisClient();
+} catch (error) {
+  logger.warn({ error: error.message }, 'Redis connection failed — running in degraded mode');
 }
 
-process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
-process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+// ── Start BullMQ workers (only if Redis is available) ──
+// Workers are started after a short delay to allow Redis to connect
+setTimeout(async () => {
+  if (isRedisReady()) {
+    try {
+      const { startWorkers } = require('./workers/index');
+      startWorkers();
+    } catch (error) {
+      logger.warn({ error: error.message }, 'Failed to start workers — running without background jobs');
+    }
+  } else {
+    logger.info('Redis not available — workers not started (degraded mode)');
+  }
+}, 2000);
 
-// Unhandled rejections — log and exit
-process.on('unhandledRejection', (reason) => {
-  console.error('Unhandled Rejection:', reason);
-  gracefulShutdown('UNHANDLED_REJECTION');
+// ── Graceful Shutdown ──
+let workersCloseFunc = null;
+try {
+  const workers = require('./workers/index');
+  workersCloseFunc = workers.closeWorkers;
+} catch {
+  // Workers module may not load if Redis is unavailable
+}
+
+registerShutdownHandlers({
+  server,
+  prisma,
+  disconnectRedis,
+  closeWorkers: workersCloseFunc,
+  closeQueues,
 });
 
 module.exports = server;

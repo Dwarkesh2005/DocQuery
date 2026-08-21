@@ -9,11 +9,11 @@ const memberService = require('./member.service');
  */
 async function listMembers(req, res, next) {
   try {
-    const members = await memberService.listMembers(req.organization.id);
+    const result = await memberService.listMembers(req.organization.id, req.query);
 
     res.status(200).json({
       success: true,
-      data: { members },
+      data: result,
     });
   } catch (error) {
     next(error);

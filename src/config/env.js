@@ -36,6 +36,44 @@ const envSchema = z.object({
     .default('12')
     .transform((val) => parseInt(val, 10))
     .pipe(z.number().min(4).max(20)),
+
+  // Redis
+  REDIS_URL: z.string().default('redis://localhost:6379'),
+
+  // Rate Limiting (requests / window in seconds)
+  RATE_LIMIT_AUTH_MAX: z
+    .string()
+    .default('10')
+    .transform((val) => parseInt(val, 10))
+    .pipe(z.number().positive()),
+  RATE_LIMIT_AUTH_WINDOW: z
+    .string()
+    .default('900')
+    .transform((val) => parseInt(val, 10))
+    .pipe(z.number().positive()),
+  RATE_LIMIT_API_MAX: z
+    .string()
+    .default('100')
+    .transform((val) => parseInt(val, 10))
+    .pipe(z.number().positive()),
+  RATE_LIMIT_API_WINDOW: z
+    .string()
+    .default('900')
+    .transform((val) => parseInt(val, 10))
+    .pipe(z.number().positive()),
+  RATE_LIMIT_HEAVY_MAX: z
+    .string()
+    .default('20')
+    .transform((val) => parseInt(val, 10))
+    .pipe(z.number().positive()),
+  RATE_LIMIT_HEAVY_WINDOW: z
+    .string()
+    .default('900')
+    .transform((val) => parseInt(val, 10))
+    .pipe(z.number().positive()),
+
+  // Logging
+  LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),
 });
 
 function loadEnv() {

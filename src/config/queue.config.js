@@ -6,7 +6,10 @@ const { getRedisClient, isRedisReady } = require('./redis');
 // ============================================================
 // Defines the application's job queues. Each queue handles a
 // specific category of background work. All queues share the
-// singleton Redis connection.
+// singleton Redis connection and a common namespace prefix.
+//
+// Note: BullMQ queue names MUST NOT contain colons (:).
+// The prefix option is used for Redis key namespacing instead.
 //
 // Queues:
 //   - audit: Audit log events (member changes, org changes)
@@ -17,10 +20,12 @@ let auditQueue = null;
 let notificationQueue = null;
 let documentQueue = null;
 
+const QUEUE_PREFIX = 'docquery';
+
 const QUEUE_NAMES = {
-  AUDIT: 'docquery:audit',
-  NOTIFICATION: 'docquery:notification',
-  DOCUMENT: 'docquery:document',
+  AUDIT: 'audit',
+  NOTIFICATION: 'notification',
+  DOCUMENT: 'document',
 };
 
 const DEFAULT_JOB_OPTIONS = {
@@ -41,6 +46,7 @@ function getAuditQueue() {
   if (!auditQueue) {
     auditQueue = new Queue(QUEUE_NAMES.AUDIT, {
       connection: getRedisClient(),
+      prefix: QUEUE_PREFIX,
       defaultJobOptions: DEFAULT_JOB_OPTIONS,
     });
   }
@@ -55,6 +61,7 @@ function getNotificationQueue() {
   if (!notificationQueue) {
     notificationQueue = new Queue(QUEUE_NAMES.NOTIFICATION, {
       connection: getRedisClient(),
+      prefix: QUEUE_PREFIX,
       defaultJobOptions: DEFAULT_JOB_OPTIONS,
     });
   }
@@ -69,6 +76,7 @@ function getDocumentQueue() {
   if (!documentQueue) {
     documentQueue = new Queue(QUEUE_NAMES.DOCUMENT, {
       connection: getRedisClient(),
+      prefix: QUEUE_PREFIX,
       defaultJobOptions: {
         ...DEFAULT_JOB_OPTIONS,
         attempts: 3,
@@ -90,6 +98,7 @@ async function closeQueues() {
 }
 
 module.exports = {
+  QUEUE_PREFIX,
   QUEUE_NAMES,
   DEFAULT_JOB_OPTIONS,
   getAuditQueue,

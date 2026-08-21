@@ -1,6 +1,6 @@
 const { Worker } = require('bullmq');
 const { getRedisClient } = require('../config/redis');
-const { QUEUE_NAMES } = require('../config/queue.config');
+const { QUEUE_NAMES, QUEUE_PREFIX } = require('../config/queue.config');
 const { logger } = require('../config/logger');
 
 // ============================================================
@@ -43,6 +43,7 @@ function createAuditWorker() {
     },
     {
       connection: getRedisClient(),
+      prefix: QUEUE_PREFIX,
       concurrency: 5,
       limiter: {
         max: 50,
@@ -88,6 +89,7 @@ function createNotificationWorker() {
     },
     {
       connection: getRedisClient(),
+      prefix: QUEUE_PREFIX,
       concurrency: 3,
     },
   );
@@ -125,6 +127,7 @@ function createDocumentWorker() {
     },
     {
       connection: getRedisClient(),
+      prefix: QUEUE_PREFIX,
       concurrency: 2,
     },
   );

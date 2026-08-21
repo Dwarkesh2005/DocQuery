@@ -8,6 +8,9 @@ const { logger } = require('../config/logger');
 // these functions to enqueue background work. Each function
 // adds an idempotency-safe job ID to prevent duplicate
 // processing when possible.
+//
+// Note: BullMQ custom job IDs MUST NOT contain colons (:).
+// Dashes (-) or underscores (_) are used as delimiters.
 
 /**
  * Enqueue an audit log event.
@@ -26,12 +29,16 @@ async function enqueueAuditEvent(data) {
   }
 
   try {
+    const actionKey = (data.action || 'event').replace(/[^a-zA-Z0-9_-]/g, '_');
+    const orgKey = (data.organizationId || 'none').replace(/[^a-zA-Z0-9_-]/g, '_');
+    const timeBucket = Math.floor(Date.now() / 300000);
+
     const job = await queue.add('audit.event', {
       ...data,
       timestamp: new Date().toISOString(),
     }, {
       // Idempotency: same action+user+org within 5 minutes deduplicates
-      jobId: `audit:${data.action}:${data.userId}:${data.organizationId || 'none'}:${Math.floor(Date.now() / 300000)}`,
+      jobId: `audit_${actionKey}_${data.userId}_${orgKey}_${timeBucket}`,
     });
     logger.debug({ jobId: job.id, action: data.action }, 'Audit event enqueued');
     return job.id;
@@ -85,12 +92,15 @@ async function enqueueDocumentJob(data) {
   }
 
   try {
+    const actionKey = (data.action || 'task').replace(/[^a-zA-Z0-9_-]/g, '_');
+    const docKey = (data.documentId || 'doc').replace(/[^a-zA-Z0-9_-]/g, '_');
+
     const job = await queue.add(`document.${data.action}`, {
       ...data,
       timestamp: new Date().toISOString(),
     }, {
       // Idempotency: same document + action deduplicates
-      jobId: `doc:${data.action}:${data.documentId}`,
+      jobId: `doc_${actionKey}_${docKey}`,
     });
     logger.debug({ jobId: job.id, action: data.action }, 'Document job enqueued');
     return job.id;

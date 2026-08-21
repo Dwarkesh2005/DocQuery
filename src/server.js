@@ -26,20 +26,27 @@ try {
   logger.warn({ error: error.message }, 'Redis connection failed — running in degraded mode');
 }
 
-// ── Start BullMQ workers (only if Redis is available) ──
-// Workers are started after a short delay to allow Redis to connect
-setTimeout(async () => {
-  if (isRedisReady()) {
-    try {
-      const { startWorkers } = require('./workers/index');
-      startWorkers();
-    } catch (error) {
-      logger.warn({ error: error.message }, 'Failed to start workers — running without background jobs');
-    }
-  } else {
-    logger.info('Redis not available — workers not started (degraded mode)');
+// ── Start BullMQ workers when Redis is ready ──
+let workersStarted = false;
+function initWorkers() {
+  if (workersStarted) return;
+  workersStarted = true;
+  try {
+    const { startWorkers } = require('./workers/index');
+    startWorkers();
+  } catch (error) {
+    logger.warn({ error: error.message }, 'Failed to start workers — running without background jobs');
   }
-}, 2000);
+}
+
+const redisClient = getRedisClient();
+if (isRedisReady()) {
+  initWorkers();
+} else if (redisClient) {
+  redisClient.once('ready', () => {
+    initWorkers();
+  });
+}
 
 // ── Graceful Shutdown ──
 let workersCloseFunc = null;

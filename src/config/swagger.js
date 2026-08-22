@@ -20,6 +20,7 @@ const swaggerDocument = {
     { name: 'Auth', description: 'Authentication & authorization' },
     { name: 'Organizations', description: 'Organization management' },
     { name: 'Members', description: 'Organization member management' },
+    { name: 'Documents', description: 'Document upload and intelligence pipeline' },
   ],
   components: {
     securitySchemes: {
@@ -73,6 +74,22 @@ const swaggerDocument = {
           name: { type: 'string' },
           role: { type: 'string', enum: ['OWNER', 'ADMIN', 'MEMBER'] },
           joinedAt: { type: 'string', format: 'date-time' },
+        },
+      },
+      Document: {
+        type: 'object',
+        properties: {
+          id: { type: 'string', format: 'uuid' },
+          organizationId: { type: 'string', format: 'uuid' },
+          name: { type: 'string' },
+          fileSize: { type: 'integer' },
+          mimeType: { type: 'string' },
+          status: { type: 'string', enum: ['UPLOADED', 'QUEUED', 'PROCESSING', 'READY', 'FAILED'] },
+          errorMessage: { type: 'string', nullable: true },
+          pageCount: { type: 'integer', nullable: true },
+          chunkCount: { type: 'integer' },
+          createdAt: { type: 'string', format: 'date-time' },
+          updatedAt: { type: 'string', format: 'date-time' },
         },
       },
       Pagination: {
@@ -392,6 +409,84 @@ const swaggerDocument = {
         responses: {
           200: { description: 'Member removed' },
           403: { description: 'Insufficient permissions' },
+        },
+      },
+    },
+    '/api/v1/documents': {
+      post: {
+        tags: ['Documents'],
+        summary: 'Upload a document',
+        description: 'Upload a PDF, TXT, or MD document to the organization workspace',
+        security: [{ BearerAuth: [] }],
+        parameters: [
+          { '$ref': '#/components/parameters/OrganizationIdHeader' },
+        ],
+        requestBody: {
+          required: true,
+          content: {
+            'multipart/form-data': {
+              schema: {
+                type: 'object',
+                required: ['file'],
+                properties: {
+                  file: { type: 'string', format: 'binary' },
+                  metadata: { type: 'string', description: 'JSON metadata string' },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          201: { description: 'Document uploaded successfully with status UPLOADED' },
+          400: { description: 'Bad request or invalid file type' },
+          401: { description: 'Not authenticated' },
+          403: { description: 'Access denied to organization' },
+        },
+      },
+      get: {
+        tags: ['Documents'],
+        summary: 'List organization documents',
+        security: [{ BearerAuth: [] }],
+        parameters: [
+          { '$ref': '#/components/parameters/OrganizationIdHeader' },
+          { name: 'page', in: 'query', schema: { type: 'integer', default: 1 } },
+          { name: 'limit', in: 'query', schema: { type: 'integer', default: 20 } },
+          { name: 'status', in: 'query', schema: { type: 'string', enum: ['UPLOADED', 'QUEUED', 'PROCESSING', 'READY', 'FAILED'] } },
+        ],
+        responses: {
+          200: { description: 'List of documents with pagination' },
+        },
+      },
+    },
+    '/api/v1/documents/{id}/process': {
+      post: {
+        tags: ['Documents'],
+        summary: 'Start background processing for document',
+        description: 'Enqueues a BullMQ job to extract text, clean, chunk, generate embeddings, and store in pgvector',
+        security: [{ BearerAuth: [] }],
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+          { '$ref': '#/components/parameters/OrganizationIdHeader' },
+        ],
+        responses: {
+          200: { description: 'Document processing enqueued with status QUEUED' },
+          404: { description: 'Document not found' },
+          409: { description: 'Document is already QUEUED or PROCESSING' },
+        },
+      },
+    },
+    '/api/v1/documents/{id}': {
+      get: {
+        tags: ['Documents'],
+        summary: 'Get document details and processing status',
+        security: [{ BearerAuth: [] }],
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+          { '$ref': '#/components/parameters/OrganizationIdHeader' },
+        ],
+        responses: {
+          200: { description: 'Document details and status' },
+          404: { description: 'Document not found' },
         },
       },
     },

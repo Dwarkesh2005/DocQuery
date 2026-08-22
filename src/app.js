@@ -13,6 +13,7 @@ const { setupSwagger } = require('./config/swagger');
 const authRoutes = require('./modules/auth/auth.routes');
 const organizationRoutes = require('./modules/organizations/organization.routes');
 const memberRoutes = require('./modules/members/member.routes');
+const documentRoutes = require('./modules/documents/document.routes');
 const healthRoutes = require('./modules/health/health.routes');
 
 // ============================================================
@@ -75,6 +76,7 @@ const apiLimiter = rateLimit({
 app.use('/api/v1/auth', authLimiter, authRoutes);
 app.use('/api/v1/organizations', apiLimiter, organizationRoutes);
 app.use('/api/v1/organizations/:id/members', apiLimiter, memberRoutes);
+app.use('/api/v1/documents', apiLimiter, documentRoutes);
 
 // ── 404 Handler ──
 app.use((_req, res) => {

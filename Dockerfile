@@ -47,6 +47,9 @@ COPY src ./src/
 ENV NODE_ENV=production
 ENV PORT=3000
 
+# Ensure uploads directory exists and is owned by nodejs user
+RUN mkdir -p /app/uploads && chown -R nodejs:nodejs /app
+
 # Switch to non-root user
 USER nodejs
 

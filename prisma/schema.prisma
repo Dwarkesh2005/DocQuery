@@ -22,6 +22,14 @@ enum OrganizationRole {
   MEMBER
 }
 
+enum DocumentStatus {
+  UPLOADED
+  QUEUED
+  PROCESSING
+  READY
+  FAILED
+}
+
 // ============================================================
 // User
 // ============================================================
@@ -40,6 +48,7 @@ model User {
   // Relations
   memberships   OrganizationMember[]
   refreshTokens RefreshToken[]
+  documents     Document[]
 
   @@map("users")
 }
@@ -58,6 +67,7 @@ model Organization {
 
   // Relations
   memberships OrganizationMember[]
+  documents   Document[]
 
   @@map("organizations")
 }
@@ -109,3 +119,61 @@ model RefreshToken {
   @@index([userId, revoked])
   @@map("refresh_tokens")
 }
+
+// ============================================================
+// Document
+// ============================================================
+// Represents an uploaded document scoped to an organization (tenant).
+
+model Document {
+  id                 String         @id @default(uuid()) @db.Uuid
+  organizationId     String         @map("organization_id") @db.Uuid
+  userId             String         @map("user_id") @db.Uuid
+  name               String
+  filePath           String         @map("file_path")
+  fileSize           Int            @map("file_size")
+  mimeType           String         @map("mime_type")
+  status             DocumentStatus @default(UPLOADED)
+  errorMessage       String?        @map("error_message")
+  processingAttempts Int            @default(0) @map("processing_attempts")
+  pageCount          Int?           @map("page_count")
+  metadata           Json?
+  createdAt          DateTime       @default(now()) @map("created_at")
+  updatedAt          DateTime       @updatedAt @map("updated_at")
+
+  // Relations
+  organization Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  chunks       DocumentChunk[]
+
+  @@index([organizationId])
+  @@index([userId])
+  @@index([organizationId, status])
+  @@map("documents")
+}
+
+// ============================================================
+// DocumentChunk
+// ============================================================
+// Represents a chunk of extracted text with its vector embedding.
+
+model DocumentChunk {
+  id         String                       @id @default(uuid()) @db.Uuid
+  documentId String                       @map("document_id") @db.Uuid
+  content    String
+  chunkIndex Int                          @map("chunk_index")
+  pageNumber Int?                         @map("page_number")
+  metadata   Json?
+  embedding  Unsupported("vector(1536)")?
+  createdAt  DateTime                     @default(now()) @map("created_at")
+  updatedAt  DateTime                     @updatedAt @map("updated_at")
+
+  // Relations
+  document Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@unique([documentId, chunkIndex])
+  @@index([documentId])
+  @@index([documentId, chunkIndex])
+  @@map("document_chunks")
+}
+

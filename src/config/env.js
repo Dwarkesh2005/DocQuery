@@ -74,6 +74,27 @@ const envSchema = z.object({
 
   // Logging
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),
+
+  // Phase 3 — Document Intelligence & Processing
+  CHUNK_SIZE: z
+    .string()
+    .default('1000')
+    .transform((val) => parseInt(val, 10))
+    .pipe(z.number().positive()),
+  CHUNK_OVERLAP: z
+    .string()
+    .default('150')
+    .transform((val) => parseInt(val, 10))
+    .pipe(z.number().nonnegative()),
+  EMBEDDING_PROVIDER: z.enum(['openai', 'mock']).default('openai'),
+  EMBEDDING_MODEL: z.string().default('text-embedding-3-small'),
+  EMBEDDING_DIMENSION: z
+    .string()
+    .default('1536')
+    .transform((val) => parseInt(val, 10))
+    .pipe(z.number().positive()),
+  OPENAI_API_KEY: z.string().optional(),
+  UPLOAD_DIR: z.string().default('./uploads'),
 });
 
 function loadEnv() {

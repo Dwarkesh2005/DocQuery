@@ -107,6 +107,8 @@ function createNotificationWorker() {
   return worker;
 }
 
+const { documentProcessingService } = require('../modules/documents/services/document-processing.service');
+
 // ── Document Processing Worker ──
 function createDocumentWorker() {
   const worker = new Worker(
@@ -116,14 +118,22 @@ function createDocumentWorker() {
         jobId: job.id,
         action: job.data.action,
         documentId: job.data.documentId,
+        organizationId: job.data.organizationId,
+        attempt: job.attemptsMade,
       }, 'Processing document job');
 
-      // Simulate document processing (OCR, embedding, summarization)
-      // In production: call OpenAI API, run local ML model, etc.
-      await new Promise((resolve) => setTimeout(resolve, 200));
+      const result = await documentProcessingService.processDocument(
+        job.data.documentId,
+        job.data.organizationId
+      );
 
-      logger.info({ jobId: job.id }, 'Document job processed');
-      return { processed: true, timestamp: new Date().toISOString() };
+      logger.info({
+        jobId: job.id,
+        documentId: job.data.documentId,
+        chunkCount: result.chunkCount,
+      }, 'Document job processed successfully');
+
+      return result;
     },
     {
       connection: getRedisClient(),
@@ -135,10 +145,16 @@ function createDocumentWorker() {
   worker.on('failed', (job, error) => {
     logger.error({
       jobId: job?.id,
+      documentId: job?.data?.documentId,
+      organizationId: job?.data?.organizationId,
       action: job?.data?.action,
       attempt: job?.attemptsMade,
       error: error.message,
     }, 'Document job failed');
+  });
+
+  worker.on('completed', (job) => {
+    logger.debug({ jobId: job.id, documentId: job.data?.documentId }, 'Document job completed');
   });
 
   workers.push(worker);

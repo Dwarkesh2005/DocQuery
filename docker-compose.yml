@@ -13,13 +13,13 @@
 services:
   # ── PostgreSQL ──
   postgres:
-    image: postgres:16-alpine
+    image: pgvector/pgvector:pg16
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
       POSTGRES_DB: ${POSTGRES_DB:-docquery}
     ports:
-      - "${POSTGRES_PORT:-5432}:5432"
+      - "${POSTGRES_PORT:-5433}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -61,6 +61,15 @@ services:
       NODE_ENV: ${NODE_ENV:-production}
       BCRYPT_SALT_ROUNDS: ${BCRYPT_SALT_ROUNDS:-12}
       LOG_LEVEL: ${LOG_LEVEL:-info}
+      EMBEDDING_PROVIDER: ${EMBEDDING_PROVIDER:-mock}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-text-embedding-3-small}
+      EMBEDDING_DIMENSION: ${EMBEDDING_DIMENSION:-1536}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      CHUNK_SIZE: ${CHUNK_SIZE:-1000}
+      CHUNK_OVERLAP: ${CHUNK_OVERLAP:-150}
+      UPLOAD_DIR: /app/uploads
+    volumes:
+      - uploads_data:/app/uploads
     depends_on:
       postgres:
         condition: service_healthy
@@ -87,6 +96,15 @@ services:
       LOG_LEVEL: ${LOG_LEVEL:-info}
       JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:-dev-access-secret-change-in-production-min-16-chars}
       JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-dev-refresh-secret-change-in-production-min-16-chars}
+      EMBEDDING_PROVIDER: ${EMBEDDING_PROVIDER:-mock}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-text-embedding-3-small}
+      EMBEDDING_DIMENSION: ${EMBEDDING_DIMENSION:-1536}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      CHUNK_SIZE: ${CHUNK_SIZE:-1000}
+      CHUNK_OVERLAP: ${CHUNK_OVERLAP:-150}
+      UPLOAD_DIR: /app/uploads
+    volumes:
+      - uploads_data:/app/uploads
     depends_on:
       postgres:
         condition: service_healthy
@@ -97,3 +115,4 @@ services:
 volumes:
   postgres_data:
   redis_data:
+  uploads_data:

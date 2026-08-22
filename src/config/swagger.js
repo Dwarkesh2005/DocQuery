@@ -21,6 +21,7 @@ const swaggerDocument = {
     { name: 'Organizations', description: 'Organization management' },
     { name: 'Members', description: 'Organization member management' },
     { name: 'Documents', description: 'Document upload and intelligence pipeline' },
+    { name: 'Search', description: 'Semantic vector similarity search across documents' },
   ],
   components: {
     securitySchemes: {
@@ -487,6 +488,75 @@ const swaggerDocument = {
         responses: {
           200: { description: 'Document details and status' },
           404: { description: 'Document not found' },
+        },
+      },
+    },
+    '/api/v1/search': {
+      post: {
+        tags: ['Search'],
+        summary: 'Semantic vector similarity search',
+        description: 'Searches organization document chunks using natural language query and pgvector cosine similarity',
+        security: [{ BearerAuth: [] }],
+        parameters: [
+          { '$ref': '#/components/parameters/OrganizationIdHeader' },
+        ],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['query'],
+                properties: {
+                  query: { type: 'string', minLength: 1, maxLength: 2000, example: 'What is the vacation policy?' },
+                  topK: { type: 'integer', minimum: 1, maximum: 20, default: 5, example: 5 },
+                  documentId: { type: 'string', format: 'uuid', example: '123e4567-e89b-12d3-a456-426614174000' },
+                  threshold: { type: 'number', minimum: 0, maximum: 1, default: 0.2, example: 0.2 },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          200: {
+            description: 'Matching document chunks ranked by cosine similarity score',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    success: { type: 'boolean', example: true },
+                    data: {
+                      type: 'object',
+                      properties: {
+                        query: { type: 'string', example: 'What is the vacation policy?' },
+                        results: {
+                          type: 'array',
+                          items: {
+                            type: 'object',
+                            properties: {
+                              chunkId: { type: 'string', format: 'uuid' },
+                              documentId: { type: 'string', format: 'uuid' },
+                              content: { type: 'string' },
+                              score: { type: 'number', example: 0.92 },
+                              pageNumber: { type: 'integer', nullable: true },
+                              chunkIndex: { type: 'integer' },
+                              metadata: { type: 'object' },
+                            },
+                          },
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+          400: { description: 'Bad request or missing organization header' },
+          401: { description: 'Unauthorized — missing or invalid JWT' },
+          403: { description: 'Forbidden — not a member of the organization' },
+          404: { description: 'Specified documentId not found in active organization' },
+          422: { description: 'Validation error (e.g. empty query or invalid topK)' },
         },
       },
     },

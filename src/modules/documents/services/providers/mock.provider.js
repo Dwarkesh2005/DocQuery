@@ -18,19 +18,45 @@ class MockEmbeddingProvider extends BaseEmbeddingProvider {
   }
 
   /**
-   * Produce a deterministic float vector of specified dimension from input text.
-   * @param {string} text
-   * @returns {number[]}
+   * Compute a deterministic word vector using SHA-256 hash.
+   * @param {string} term
+   * @returns {Float32Array}
    */
-  _generateSingle(text) {
+  _hashToVector(term) {
     const vector = new Float32Array(this.dimension);
-    const hash = crypto.createHash('sha256').update(text || '').digest();
+    const hash = crypto.createHash('sha256').update(term).digest();
 
     for (let i = 0; i < this.dimension; i++) {
       const byte1 = hash[i % hash.length];
       const byte2 = hash[(i + 7) % hash.length];
       const val = ((byte1 << 8) | byte2) / 65535; // Value between 0 and 1
       vector[i] = (val * 2) - 1; // Value between -1 and 1
+    }
+    return vector;
+  }
+
+  /**
+   * Produce a deterministic float vector of specified dimension from input text.
+   * Uses token composition (bag-of-words) to enable realistic similarity scoring in tests.
+   * @param {string} text
+   * @returns {number[]}
+   */
+  _generateSingle(text) {
+    const vector = new Float32Array(this.dimension);
+    const words = (text || '').toLowerCase().match(/\b\w+\b/g) || [];
+
+    if (words.length === 0) {
+      const fallback = this._hashToVector(text || '');
+      for (let i = 0; i < this.dimension; i++) {
+        vector[i] = fallback[i];
+      }
+    } else {
+      for (const word of words) {
+        const wordVec = this._hashToVector(word);
+        for (let i = 0; i < this.dimension; i++) {
+          vector[i] += wordVec[i];
+        }
+      }
     }
 
     // L2 Normalize

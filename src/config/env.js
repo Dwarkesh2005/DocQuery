@@ -95,6 +95,23 @@ const envSchema = z.object({
     .pipe(z.number().positive()),
   OPENAI_API_KEY: z.string().optional(),
   UPLOAD_DIR: z.string().default('./uploads'),
+
+  // Phase 4 — Semantic Search
+  SEARCH_SIMILARITY_THRESHOLD: z
+    .string()
+    .default('0.2')
+    .transform((val) => parseFloat(val))
+    .pipe(z.number().min(0).max(1)),
+  SEARCH_DEFAULT_TOP_K: z
+    .string()
+    .default('5')
+    .transform((val) => parseInt(val, 10))
+    .pipe(z.number().positive()),
+  SEARCH_MAX_TOP_K: z
+    .string()
+    .default('20')
+    .transform((val) => parseInt(val, 10))
+    .pipe(z.number().positive()),
 });
 
 function loadEnv() {

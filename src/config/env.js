@@ -112,6 +112,10 @@ const envSchema = z.object({
     .default('20')
     .transform((val) => parseInt(val, 10))
     .pipe(z.number().positive()),
+
+  // Phase 5 — RAG Answer Generation
+  LLM_PROVIDER: z.enum(['openai', 'mock']).default('openai'),
+  LLM_MODEL: z.string().default('gpt-4o-mini'),
 });
 
 function loadEnv() {

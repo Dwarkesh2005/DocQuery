@@ -45,6 +45,8 @@ class QueryService {
    * @param {number} [params.topK]         - Max chunks to retrieve
    * @param {string} [params.documentId]   - Optional document filter
    * @param {number} [params.threshold]    - Optional similarity threshold override
+   * @param {Array<{ role: string, content: string }>} [params.conversationHistory] - Prior conversation turns
+   * @param {string} [params.retrievalQuery] - Optional contextualized retrieval query
    * @returns {Promise<{ answer: string, citations: Array, metadata: object }>}
    */
   async query({
@@ -53,6 +55,8 @@ class QueryService {
     topK,
     documentId,
     threshold,
+    conversationHistory = [],
+    retrievalQuery,
   }) {
     const startTime = Date.now();
 
@@ -61,7 +65,7 @@ class QueryService {
     // ── Step 1: Retrieve relevant chunks via Phase 4 ──
     const searchResult = await this.searchService.search({
       organizationId,
-      query,
+      query: retrievalQuery || query,
       topK,
       documentId,
       threshold,
@@ -95,7 +99,7 @@ class QueryService {
     // ── Step 3: Build context and prompts ──
     const context = this._buildContext(retrievedChunks);
     const systemPrompt = this._buildSystemPrompt();
-    const userPrompt = this._buildUserPrompt(query, context);
+    const userPrompt = this._buildUserPrompt(query, context, conversationHistory);
 
     // ── Step 4: Call the LLM ──
     logger.info({ organizationId }, 'LLM request started');
@@ -200,20 +204,35 @@ class QueryService {
   }
 
   /**
-   * Build the user prompt combining the question with context.
+   * Build the user prompt combining the question with context and conversation history.
    * @param {string} query - The user's question
    * @param {string} context - Formatted source context
+   * @param {Array<{ role: string, content: string }>} [conversationHistory] - Prior conversation turns
    * @returns {string}
    */
-  _buildUserPrompt(query, context) {
-    return [
+  _buildUserPrompt(query, context, conversationHistory = []) {
+    const parts = [
       'DOCUMENT CONTEXT:',
       '================',
       context,
       '================',
-      '',
-      `QUESTION: ${query}`,
-    ].join('\n');
+    ];
+
+    if (Array.isArray(conversationHistory) && conversationHistory.length > 0) {
+      const historyText = conversationHistory
+        .map((msg) => `${msg.role === 'USER' ? 'User' : 'Assistant'}: ${msg.content}`)
+        .join('\n\n');
+      parts.push(
+        '',
+        'PREVIOUS CONVERSATION:',
+        '=====================',
+        historyText,
+        '====================='
+      );
+    }
+
+    parts.push('', `QUESTION: ${query}`);
+    return parts.join('\n');
   }
 
   // ────────────────────────────────────────────────────────────

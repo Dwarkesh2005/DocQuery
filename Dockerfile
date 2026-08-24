@@ -6,15 +6,15 @@
 
 FROM node:24-alpine AS base
 
-# Install dumb-init for proper PID 1 signal handling
-RUN apk add --no-cache dumb-init
+# Install dumb-init for proper PID 1 signal handling and openssl for Prisma
+RUN apk add --no-cache dumb-init openssl
 
 WORKDIR /app
 
 # ── Dependencies Stage ──
 FROM base AS deps
 COPY package.json package-lock.json ./
-RUN npm ci --only=production && npm cache clean --force
+RUN npm ci --omit=dev && npm cache clean --force
 
 # ── Build Stage (Prisma generation) ──
 FROM base AS build

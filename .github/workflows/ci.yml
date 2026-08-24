@@ -18,6 +18,8 @@ env:
   JWT_ACCESS_SECRET: ci-test-access-secret-minimum-16-chars
   JWT_REFRESH_SECRET: ci-test-refresh-secret-minimum-16-chars
   REDIS_URL: redis://localhost:6379
+  EMBEDDING_PROVIDER: mock
+  LLM_PROVIDER: mock
 
 jobs:
   ci:
@@ -25,7 +27,7 @@ jobs:
 
     services:
       postgres:
-        image: postgres:16-alpine
+        image: pgvector/pgvector:pg16
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres

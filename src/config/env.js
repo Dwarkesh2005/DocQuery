@@ -116,6 +116,13 @@ const envSchema = z.object({
   // Phase 5 — RAG Answer Generation
   LLM_PROVIDER: z.enum(['openai', 'mock']).default('openai'),
   LLM_MODEL: z.string().default('gpt-4o-mini'),
+
+  // Phase 6 — Conversations & Query History
+  CONVERSATION_HISTORY_LIMIT: z
+    .string()
+    .default('10')
+    .transform((val) => parseInt(val, 10))
+    .pipe(z.number().positive()),
 });
 
 function loadEnv() {

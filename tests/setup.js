@@ -7,10 +7,15 @@ const prisma = new PrismaClient();
  * Respects foreign key order.
  */
 async function cleanDatabase() {
-  await prisma.refreshToken.deleteMany();
-  await prisma.organizationMember.deleteMany();
-  await prisma.organization.deleteMany();
-  await prisma.user.deleteMany();
+  await prisma.messageSource.deleteMany().catch(() => {});
+  await prisma.message.deleteMany().catch(() => {});
+  await prisma.conversation.deleteMany().catch(() => {});
+  await prisma.documentChunk.deleteMany().catch(() => {});
+  await prisma.document.deleteMany().catch(() => {});
+  await prisma.refreshToken.deleteMany().catch(() => {});
+  await prisma.organizationMember.deleteMany().catch(() => {});
+  await prisma.organization.deleteMany().catch(() => {});
+  await prisma.user.deleteMany().catch(() => {});
 }
 
 /**

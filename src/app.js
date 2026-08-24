@@ -16,6 +16,7 @@ const memberRoutes = require('./modules/members/member.routes');
 const documentRoutes = require('./modules/documents/document.routes');
 const searchRoutes = require('./modules/search/search.routes');
 const queryRoutes = require('./modules/query/query.routes');
+const conversationRoutes = require('./modules/conversations/conversation.routes');
 const healthRoutes = require('./modules/health/health.routes');
 
 // ============================================================
@@ -81,6 +82,7 @@ app.use('/api/v1/organizations/:id/members', apiLimiter, memberRoutes);
 app.use('/api/v1/documents', apiLimiter, documentRoutes);
 app.use('/api/v1/search', apiLimiter, searchRoutes);
 app.use('/api/v1/query', apiLimiter, queryRoutes);
+app.use('/api/v1/conversations', apiLimiter, conversationRoutes);
 
 // ── 404 Handler ──
 app.use((_req, res) => {

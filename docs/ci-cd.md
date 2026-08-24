@@ -4,7 +4,7 @@
 The continuous integration pipeline automates quality checks on every push and pull request to the `main` branch.
 
 ## Pipeline Steps
-1. **Service Containers**: Boots PostgreSQL 16 and Redis 7 health-checked service containers.
+1. **Service Containers**: Boots PostgreSQL 16 with pgvector (`pgvector/pgvector:pg16`) and Redis 7 health-checked service containers.
 2. **Setup**: Installs Node 24 with npm caching.
 3. **Dependencies**: `npm ci` installs deterministic production and dev dependencies.
 4. **Prisma Generation**: `npx prisma generate` creates the database client.

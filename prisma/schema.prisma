@@ -30,6 +30,11 @@ enum DocumentStatus {
   FAILED
 }
 
+enum MessageRole {
+  USER
+  ASSISTANT
+}
+
 // ============================================================
 // User
 // ============================================================
@@ -49,6 +54,7 @@ model User {
   memberships   OrganizationMember[]
   refreshTokens RefreshToken[]
   documents     Document[]
+  conversations Conversation[]
 
   @@map("users")
 }
@@ -66,8 +72,9 @@ model Organization {
   updatedAt DateTime @updatedAt @map("updated_at")
 
   // Relations
-  memberships OrganizationMember[]
-  documents   Document[]
+  memberships   OrganizationMember[]
+  documents     Document[]
+  conversations Conversation[]
 
   @@map("organizations")
 }
@@ -142,9 +149,10 @@ model Document {
   updatedAt          DateTime       @updatedAt @map("updated_at")
 
   // Relations
-  organization Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  user         User            @relation(fields: [userId], references: [id], onDelete: Cascade)
-  chunks       DocumentChunk[]
+  organization   Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user           User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  chunks         DocumentChunk[]
+  messageSources MessageSource[]
 
   @@index([organizationId])
   @@index([userId])
@@ -176,4 +184,77 @@ model DocumentChunk {
   @@index([documentId, chunkIndex])
   @@map("document_chunks")
 }
+
+// ============================================================
+// Conversation
+// ============================================================
+// Represents a multi-turn conversation session owned by a user
+// within an organization.
+
+model Conversation {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  userId         String   @map("user_id") @db.Uuid
+  title          String
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages     Message[]
+
+  @@index([organizationId])
+  @@index([userId])
+  @@index([organizationId, userId])
+  @@index([createdAt])
+  @@map("conversations")
+}
+
+// ============================================================
+// Message
+// ============================================================
+// Represents a single turn (user or assistant) in a conversation.
+
+model Message {
+  id             String          @id @default(uuid()) @db.Uuid
+  conversationId String          @map("conversation_id") @db.Uuid
+  role           MessageRole
+  content        String
+  createdAt      DateTime        @default(now()) @map("created_at")
+
+  // Relations
+  conversation Conversation    @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sources      MessageSource[]
+
+  @@index([conversationId])
+  @@index([conversationId, createdAt])
+  @@map("messages")
+}
+
+// ============================================================
+// MessageSource
+// ============================================================
+// Persisted source/citation metadata associated with an assistant message.
+
+model MessageSource {
+  id           String   @id @default(uuid()) @db.Uuid
+  messageId    String   @map("message_id") @db.Uuid
+  documentId   String   @map("document_id") @db.Uuid
+  chunkId      String   @map("chunk_id") @db.Uuid
+  documentName String?  @map("document_name")
+  pageNumber   Int?     @map("page_number")
+  content      String
+  score        Float?
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  // Relations
+  message  Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  document Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@index([messageId])
+  @@index([documentId])
+  @@map("message_sources")
+}
+
 

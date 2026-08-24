@@ -72,35 +72,55 @@ class EmbeddingService {
       'Starting batched embedding generation'
     );
 
-    for (let i = 0; i < texts.length; i += this.batchSize) {
-      const batch = texts.slice(i, i + this.batchSize);
-      const batchIndex = Math.floor(i / this.batchSize) + 1;
+    const startTime = Date.now();
+    try {
+      for (let i = 0; i < texts.length; i += this.batchSize) {
+        const batch = texts.slice(i, i + this.batchSize);
+        const batchIndex = Math.floor(i / this.batchSize) + 1;
 
-      logger.trace({ batchIndex, totalBatches, count: batch.length }, 'Processing embedding batch');
+        logger.trace({ batchIndex, totalBatches, count: batch.length }, 'Processing embedding batch');
 
-      const batchVectors = await this.provider.generateEmbeddings(batch);
+        const batchVectors = await this.provider.generateEmbeddings(batch);
 
-      if (!Array.isArray(batchVectors) || batchVectors.length !== batch.length) {
-        throw new Error(
-          `Embedding provider returned ${batchVectors?.length ?? 0} vectors for a batch of ${batch.length} items`
-        );
-      }
-
-      // Validate dimensions
-      for (let j = 0; j < batchVectors.length; j++) {
-        const vec = batchVectors[j];
-        if (!Array.isArray(vec) || vec.length !== this.expectedDimension) {
+        if (!Array.isArray(batchVectors) || batchVectors.length !== batch.length) {
           throw new Error(
-            `Embedding dimension mismatch: expected ${this.expectedDimension}, but got ${vec?.length}`
+            `Embedding provider returned ${batchVectors?.length ?? 0} vectors for a batch of ${batch.length} items`
           );
         }
+
+        // Validate dimensions
+        for (let j = 0; j < batchVectors.length; j++) {
+          const vec = batchVectors[j];
+          if (!Array.isArray(vec) || vec.length !== this.expectedDimension) {
+            throw new Error(
+              `Embedding dimension mismatch: expected ${this.expectedDimension}, but got ${vec?.length}`
+            );
+          }
+        }
+
+        allEmbeddings.push(...batchVectors);
       }
 
-      allEmbeddings.push(...batchVectors);
-    }
+      const durationMs = Date.now() - startTime;
+      const { metricsService } = require('../../../services/metrics.service');
+      metricsService.recordEmbeddingCall({
+        textCount: texts.length,
+        durationMs,
+        success: true,
+      });
 
-    logger.debug({ totalEmbeddings: allEmbeddings.length }, 'Embedding generation complete');
-    return allEmbeddings;
+      logger.debug({ totalEmbeddings: allEmbeddings.length, durationMs }, 'Embedding generation complete');
+      return allEmbeddings;
+    } catch (error) {
+      const durationMs = Date.now() - startTime;
+      const { metricsService } = require('../../../services/metrics.service');
+      metricsService.recordEmbeddingCall({
+        textCount: texts.length,
+        durationMs,
+        success: false,
+      });
+      throw error;
+    }
   }
 }
 

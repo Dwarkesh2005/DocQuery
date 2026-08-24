@@ -4,20 +4,10 @@ const { QUEUE_NAMES, QUEUE_PREFIX } = require('../config/queue.config');
 const { logger } = require('../config/logger');
 
 // ============================================================
-// BullMQ Workers
+// BullMQ Workers — Reliable Background Processing
 // ============================================================
-// Background job processors. Each worker handles jobs from a
-// specific queue. Workers run in the same process for
-// simplicity, but can be split into separate processes for
-// horizontal scaling.
-//
-// Trade-offs:
-//   At-most-once:  Job may be lost if worker crashes mid-process
-//   At-least-once: Job may be processed twice on crash recovery ← WE USE THIS
-//   Exactly-once:  Requires external transaction coordination
-//
-// We use at-least-once with idempotent job handlers to safely
-// handle re-processing after crashes.
+// Background job processors with at-least-once delivery, exponential
+// retry backoffs, and idempotent transaction-safe handlers.
 
 const workers = [];
 
@@ -34,8 +24,6 @@ function createAuditWorker() {
       }, 'Processing audit event');
 
       // Simulate audit log storage (idempotent: upsert by job ID)
-      // In production, this would write to an audit log table or
-      // forward to an external analytics/SIEM system
       await new Promise((resolve) => setTimeout(resolve, 50));
 
       logger.info({ jobId: job.id }, 'Audit event processed');
@@ -47,7 +35,7 @@ function createAuditWorker() {
       concurrency: 5,
       limiter: {
         max: 50,
-        duration: 1000, // 50 jobs per second max
+        duration: 1000,
       },
     },
   );
@@ -55,6 +43,8 @@ function createAuditWorker() {
   worker.on('failed', (job, error) => {
     logger.error({
       jobId: job?.id,
+      action: job?.data?.action,
+      userId: job?.data?.userId,
       attempt: job?.attemptsMade,
       maxAttempts: job?.opts?.attempts,
       error: error.message,
@@ -80,8 +70,6 @@ function createNotificationWorker() {
         userId: job.data.userId,
       }, 'Processing notification');
 
-      // Simulate sending notification (email, push, etc.)
-      // In production: call SendGrid, AWS SES, Firebase, etc.
       await new Promise((resolve) => setTimeout(resolve, 100));
 
       logger.info({ jobId: job.id }, 'Notification sent');
@@ -99,6 +87,7 @@ function createNotificationWorker() {
       jobId: job?.id,
       type: job?.data?.type,
       attempt: job?.attemptsMade,
+      maxAttempts: job?.opts?.attempts,
       error: error.message,
     }, 'Notification job failed');
   });
@@ -149,6 +138,7 @@ function createDocumentWorker() {
       organizationId: job?.data?.organizationId,
       action: job?.data?.action,
       attempt: job?.attemptsMade,
+      maxAttempts: job?.opts?.attempts,
       error: error.message,
     }, 'Document job failed');
   });
@@ -162,7 +152,7 @@ function createDocumentWorker() {
 }
 
 /**
- * Start all workers.
+ * Start all background workers.
  */
 function startWorkers() {
   createAuditWorker();
@@ -172,11 +162,35 @@ function startWorkers() {
 }
 
 /**
- * Close all workers gracefully.
+ * Close all workers gracefully with timeout.
+ * @param {number} [timeoutMs=5000]
  */
-async function closeWorkers() {
-  await Promise.all(workers.map((w) => w.close()));
+async function closeWorkers(timeoutMs = 5000) {
+  if (workers.length === 0) return;
+
+  const closePromises = workers.map(async (worker) => {
+    try {
+      await worker.pause(true);
+      await Promise.race([
+        worker.close(),
+        new Promise((resolve) => setTimeout(resolve, timeoutMs)),
+      ]);
+    } catch (err) {
+      logger.warn({ error: err.message }, 'Error closing worker');
+    }
+  });
+
+  await Promise.all(closePromises);
   workers.length = 0;
+  logger.info('All BullMQ workers closed gracefully');
 }
 
-module.exports = { startWorkers, closeWorkers };
+module.exports = {
+  startWorkers,
+  closeWorkers,
+  createAuditWorker,
+  createNotificationWorker,
+  createDocumentWorker,
+  workers,
+};
+

@@ -70,9 +70,15 @@ const authLimiter = rateLimit({
 });
 
 const apiLimiter = rateLimit({
-  max: env.RATE_LIMIT_API_MAX,
-  windowSec: env.RATE_LIMIT_API_WINDOW,
+  max: env.RATE_LIMIT_MAX_REQUESTS || env.RATE_LIMIT_API_MAX,
+  windowSec: env.RATE_LIMIT_WINDOW_MS ? Math.ceil(env.RATE_LIMIT_WINDOW_MS / 1000) : env.RATE_LIMIT_API_WINDOW,
   prefix: 'api',
+});
+
+const ragLimiter = rateLimit({
+  max: env.RAG_RATE_LIMIT_MAX_REQUESTS || env.RATE_LIMIT_HEAVY_MAX,
+  windowSec: env.RAG_RATE_LIMIT_WINDOW_MS ? Math.ceil(env.RAG_RATE_LIMIT_WINDOW_MS / 1000) : env.RATE_LIMIT_HEAVY_WINDOW,
+  prefix: 'rag',
 });
 
 // ── API v1 Routes ──
@@ -80,9 +86,9 @@ app.use('/api/v1/auth', authLimiter, authRoutes);
 app.use('/api/v1/organizations', apiLimiter, organizationRoutes);
 app.use('/api/v1/organizations/:id/members', apiLimiter, memberRoutes);
 app.use('/api/v1/documents', apiLimiter, documentRoutes);
-app.use('/api/v1/search', apiLimiter, searchRoutes);
-app.use('/api/v1/query', apiLimiter, queryRoutes);
-app.use('/api/v1/conversations', apiLimiter, conversationRoutes);
+app.use('/api/v1/search', ragLimiter, searchRoutes);
+app.use('/api/v1/query', ragLimiter, queryRoutes);
+app.use('/api/v1/conversations', ragLimiter, conversationRoutes);
 
 // ── 404 Handler ──
 app.use((_req, res) => {

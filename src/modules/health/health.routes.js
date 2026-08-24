@@ -85,4 +85,19 @@ router.get('/ready', async (_req, res) => {
   });
 });
 
+const { metricsService } = require('../../services/metrics.service');
+
+/**
+ * GET /health/metrics — Observability & Telemetry Metrics
+ * Returns aggregated application metrics across HTTP, RAG, LLM, Embeddings, and Workers.
+ */
+router.get('/metrics', (_req, res) => {
+  const metrics = metricsService.getSummary();
+  res.status(200).json({
+    success: true,
+    data: metrics,
+  });
+});
+
 module.exports = router;
+

@@ -9,10 +9,10 @@ const { env } = require('./env');
 //
 // Usage:
 //   const { logger } = require('../config/logger');
-//   logger.info({ userId, action: 'login' }, 'User logged in');
+//   logger.info({ requestId, userId, organizationId, action: 'login' }, 'User logged in');
 
 const logger = pino({
-  level: env.LOG_LEVEL,
+  level: env.LOG_LEVEL || 'info',
   // Redact sensitive fields from all log output
   redact: {
     paths: [
@@ -25,6 +25,17 @@ const logger = pino({
       'req.headers.authorization',
       'apiKey',
       'secret',
+      'OPENAI_API_KEY',
+      'openai_api_key',
+      'cookie',
+      'req.headers.cookie',
+      'headers.authorization',
+      'headers.cookie',
+      '*.password',
+      '*.passwordHash',
+      '*.token',
+      '*.apiKey',
+      '*.secret',
     ],
     censor: '[REDACTED]',
   },
@@ -45,13 +56,17 @@ const logger = pino({
     err: pino.stdSerializers.err,
     req: (req) => ({
       method: req.method,
-      url: req.url,
-      requestId: req.id,
+      url: req.url || req.originalUrl,
+      requestId: req.id || req.requestId,
+      userId: req.user?.id,
+      organizationId: req.organization?.id,
     }),
     res: (res) => ({
       statusCode: res.statusCode,
+      contentLength: res.get ? res.get('content-length') : undefined,
     }),
   },
 });
 
 module.exports = { logger };
+

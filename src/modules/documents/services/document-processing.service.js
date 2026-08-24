@@ -5,6 +5,7 @@ const { extractorFactory } = require('../extractors/extractor.factory');
 const { documentCleanerService } = require('./document-cleaner.service');
 const { chunkerService } = require('./chunker.service');
 const { embeddingService } = require('./embedding.service');
+const { ragCacheService } = require('../../../services/rag-cache.service');
 const { logger } = require('../../../config/logger');
 const { NotFoundError, ForbiddenError, BadRequestError } = require('../../../utils/errors');
 
@@ -22,6 +23,7 @@ class DocumentProcessingService {
     this.cleaner = options.documentCleanerService || documentCleanerService;
     this.chunker = options.chunkerService || chunkerService;
     this.embedder = options.embeddingService || embeddingService;
+    this.cacheService = options.cacheService || ragCacheService;
   }
 
   /**
@@ -129,6 +131,9 @@ class DocumentProcessingService {
         },
       });
 
+      // 12. Invalidate tenant RAG cache so fresh chunks are immediately queryable
+      await this.cacheService.invalidateTenant(organizationId).catch(() => {});
+
       logger.info({ documentId, chunkCount: chunks.length }, 'Document processing succeeded -> READY');
 
       return {
@@ -137,7 +142,7 @@ class DocumentProcessingService {
         chunkCount: chunks.length,
       };
     } catch (error) {
-      // 12. Mark document as FAILED on error
+      // 13. Mark document as FAILED on error
       const safeErrorMessage = error.message ? error.message.slice(0, 500) : 'Unknown processing error';
 
       logger.error({ documentId, error: safeErrorMessage }, 'Document processing failed -> FAILED');

@@ -6,6 +6,8 @@ node_modules/
 # Build & Bundling
 dist/
 build/
+out/
+.next/
 
 # Environment Variables & Secrets
 .env
@@ -15,8 +17,12 @@ build/
 .env.test.local
 .env.production.local
 !.env.example
+*.pem
+*.key
+*.cert
+*.crt
 
-# Logs
+# Logs & Diagnostics
 logs/
 *.log
 npm-debug.log*
@@ -29,6 +35,9 @@ lerna-debug.log*
 coverage/
 .nyc_output/
 *.lcov
+.jest/
+junit.xml
+test-results/
 
 # Uploads & Temporary Storage
 uploads/*
@@ -37,8 +46,9 @@ tmp/
 temp/
 .tmp/
 *.tmp
+scratch/
 
-# Private Scripts & Handbooks
+# Local & Internal Scripts
 .local/
 generate-handbook-pdf.js
 
@@ -49,6 +59,10 @@ generate-handbook-pdf.js
 *.swo
 *.sublime-project
 *.sublime-workspace
+.agents/
+.gemini/
+.antigravity/
+.system_generated/
 
 # Operating System Files
 .DS_Store
@@ -60,6 +74,9 @@ ehthumbs.db
 Thumbs.db
 [Dd]esktop.ini
 
-# Prisma
+# Database & Storage
 prisma/*.db
 prisma/*.db-journal
+*.sqlite
+*.sqlite3
+*.sqlite-journal

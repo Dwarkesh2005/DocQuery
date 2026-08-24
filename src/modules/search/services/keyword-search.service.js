@@ -6,8 +6,8 @@ const { RAG_CONFIG } = require('../../../config/rag.config');
 
 // ============================================================
 // Keyword Search Service — PostgreSQL Full-Text Lexical Search
+// Phase 9: Enterprise Intelligence, Security & Scale
 // ============================================================
-// Performs tenant-isolated lexical full-text queries over indexed document chunks.
 
 class KeywordSearchService {
   /**
@@ -26,6 +26,7 @@ class KeywordSearchService {
    * @param {string} params.query - Keyword search query
    * @param {number} [params.topK] - Max results to return
    * @param {string} [params.documentId] - Optional document UUID filter
+   * @param {string[]} [params.allowedDocumentIds] - Optional array of permitted document UUIDs
    * @returns {Promise<{ query: string, results: Array<object> }>}
    */
   async search({
@@ -33,10 +34,15 @@ class KeywordSearchService {
     query,
     topK = RAG_CONFIG.keywordTopK,
     documentId = null,
+    allowedDocumentIds = null,
   }) {
     const startTime = Date.now();
 
     if (!query || !query.trim()) {
+      return { query, results: [] };
+    }
+
+    if (Array.isArray(allowedDocumentIds) && allowedDocumentIds.length === 0) {
       return { query, results: [] };
     }
 
@@ -57,6 +63,7 @@ class KeywordSearchService {
       query: query.trim(),
       topK,
       documentId,
+      allowedDocumentIds,
     });
 
     const results = rawChunks.map((chunk) => ({

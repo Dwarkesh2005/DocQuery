@@ -3,13 +3,14 @@ const { Prisma } = require('@prisma/client');
 
 // ============================================================
 // Search Repository
+// Phase 9: Enterprise Intelligence, Security & Scale
 // ============================================================
 // Performs PostgreSQL + pgvector similarity search strictly scoped
-// to the authenticated organization (tenant isolation).
+// to the authenticated organization and pre-filtered document permissions.
 
 class SearchRepository {
   /**
-   * Perform vector similarity search on document chunks.
+   * Perform vector similarity search on document chunks with permission pre-filtering.
    * Uses cosine distance (`<=>` operator) and calculates cosine similarity (`1 - distance`).
    *
    * @param {object} params
@@ -18,6 +19,7 @@ class SearchRepository {
    * @param {number} params.topK - Maximum number of chunks to return
    * @param {number} params.threshold - Minimum cosine similarity threshold [0.0, 1.0]
    * @param {string} [params.documentId] - Optional document UUID filter
+   * @param {string[]} [params.allowedDocumentIds] - Optional array of authorized document UUIDs
    * @returns {Promise<Array<{ chunkId: string, documentId: string, content: string, score: number, pageNumber: number | null, chunkIndex: number, metadata: object | null }>>}
    */
   async findSimilarChunks({
@@ -26,12 +28,24 @@ class SearchRepository {
     topK,
     threshold,
     documentId = null,
+    allowedDocumentIds = null,
   }) {
+    // If permission filter is empty array, user has access to 0 documents
+    if (Array.isArray(allowedDocumentIds) && allowedDocumentIds.length === 0) {
+      return [];
+    }
+
     const vectorStr = `[${queryVector.join(',')}]`;
 
-    const documentCondition = documentId
-      ? Prisma.sql`AND d.id = ${documentId}::uuid`
-      : Prisma.empty;
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(organizationId);
+    if (!isUuid) return [];
+
+    let documentCondition = Prisma.empty;
+    if (documentId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(documentId)) {
+      documentCondition = Prisma.sql`AND d.id = ${documentId}::uuid`;
+    } else if (Array.isArray(allowedDocumentIds) && allowedDocumentIds.length > 0) {
+      documentCondition = Prisma.sql`AND d.id = ANY(${allowedDocumentIds}::uuid[])`;
+    }
 
     const rows = await prisma.$queryRaw`
       SELECT
@@ -57,13 +71,14 @@ class SearchRepository {
   }
 
   /**
-   * Perform PostgreSQL Full-Text Search (keyword search) on document chunks.
+   * Perform PostgreSQL Full-Text Search (keyword search) on document chunks with permission pre-filtering.
    *
    * @param {object} params
    * @param {string} params.organizationId - Validated tenant UUID
    * @param {string} params.query - Keyword search string
    * @param {number} [params.topK=20] - Maximum chunks to return
    * @param {string} [params.documentId] - Optional document UUID filter
+   * @param {string[]} [params.allowedDocumentIds] - Optional array of authorized document UUIDs
    * @returns {Promise<Array<{ chunkId: string, documentId: string, content: string, score: number, pageNumber: number | null, chunkIndex: number, metadata: object | null }>>}
    */
   async findKeywordChunks({
@@ -71,15 +86,24 @@ class SearchRepository {
     query,
     topK = 20,
     documentId = null,
+    allowedDocumentIds = null,
   }) {
     if (!query || !query.trim()) return [];
+
+    // If permission filter is empty array, user has access to 0 documents
+    if (Array.isArray(allowedDocumentIds) && allowedDocumentIds.length === 0) {
+      return [];
+    }
 
     const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(organizationId);
     if (!isUuid) return [];
 
-    const documentCondition = (documentId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(documentId))
-      ? Prisma.sql`AND d.id = ${documentId}::uuid`
-      : Prisma.empty;
+    let documentCondition = Prisma.empty;
+    if (documentId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(documentId)) {
+      documentCondition = Prisma.sql`AND d.id = ${documentId}::uuid`;
+    } else if (Array.isArray(allowedDocumentIds) && allowedDocumentIds.length > 0) {
+      documentCondition = Prisma.sql`AND d.id = ANY(${allowedDocumentIds}::uuid[])`;
+    }
 
     const rows = await prisma.$queryRaw`
       SELECT
@@ -110,4 +134,3 @@ module.exports = {
   SearchRepository,
   searchRepository,
 };
-

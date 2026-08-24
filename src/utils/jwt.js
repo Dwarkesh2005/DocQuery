@@ -10,7 +10,11 @@ const { env } = require('../config/env');
  * @param {string} userId
  * @returns {string}
  */
-function generateAccessToken(userId) {
+function generateAccessToken(userIdOrPayload) {
+  const userId = typeof userIdOrPayload === 'object' && userIdOrPayload !== null
+    ? (userIdOrPayload.sub || userIdOrPayload.id)
+    : userIdOrPayload;
+
   const payload = {
     sub: userId,
     type: 'access',

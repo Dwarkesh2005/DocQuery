@@ -18,10 +18,13 @@ const searchRoutes = require('./modules/search/search.routes');
 const queryRoutes = require('./modules/query/query.routes');
 const conversationRoutes = require('./modules/conversations/conversation.routes');
 const evaluationRoutes = require('./modules/evaluations/evaluation.routes');
+const apiKeyRoutes = require('./modules/api-keys/api-key.routes');
+const auditRoutes = require('./modules/audit/audit.routes');
 const healthRoutes = require('./modules/health/health.routes');
 
 // ============================================================
 // Express Application
+// Phase 9: Enterprise Intelligence, Security & Scale
 // ============================================================
 
 const app = express();
@@ -37,7 +40,7 @@ app.use(helmet({
 app.use(cors({
   origin: env.NODE_ENV === 'production' ? false : '*',
   methods: ['GET', 'POST', 'PATCH', 'DELETE'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Organization-Id', 'X-Request-Id'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Organization-Id', 'X-Request-Id', 'X-API-Key'],
   exposedHeaders: ['X-Request-Id', 'X-Cache', 'RateLimit-Limit', 'RateLimit-Remaining', 'RateLimit-Reset', 'Retry-After'],
   maxAge: 86400,
 }));
@@ -87,6 +90,8 @@ app.use('/api/v1/auth', authLimiter, authRoutes);
 app.use('/api/v1/organizations', apiLimiter, organizationRoutes);
 app.use('/api/v1/organizations/:id/members', apiLimiter, memberRoutes);
 app.use('/api/v1/documents', apiLimiter, documentRoutes);
+app.use('/api/v1/api-keys', apiLimiter, apiKeyRoutes);
+app.use('/api/v1/audit-logs', apiLimiter, auditRoutes);
 app.use('/api/v1/search', ragLimiter, searchRoutes);
 app.use('/api/v1/query', ragLimiter, queryRoutes);
 app.use('/api/v1/conversations', ragLimiter, conversationRoutes);

@@ -106,6 +106,9 @@ class QueryService {
     threshold,
     conversationHistory = [],
     retrievalQuery,
+    userId,
+    userRole,
+    allowedDocumentIds,
     answerMode = env.DEFAULT_ANSWER_MODE || RAG_CONFIG.answerMode || 'STRICT',
     enableHybrid = env.ENABLE_HYBRID_SEARCH !== false,
     enableReranking = env.ENABLE_RERANKING !== false,
@@ -172,6 +175,18 @@ class QueryService {
     }
     const rewriteDurationMs = Date.now() - rewriteStart;
 
+    // ── Step 3.5: Pre-Retrieval Permission Filtering ──
+    let allowedDocIds = allowedDocumentIds;
+    if (allowedDocIds === undefined && userId && userRole && (userRole !== 'OWNER' && userRole !== 'ADMIN')) {
+      const { documentAccessService } = require('../documents/services/document-access.service');
+      allowedDocIds = await documentAccessService.getAccessibleDocumentIds({
+        userId,
+        userRole,
+        organizationId,
+        requiredLevel: 'READ',
+      });
+    }
+
     // ── Step 4: Hybrid Retrieval (Vector + Full-Text Search via RRF) ──
     const retrievalStart = Date.now();
     let rawChunks = [];
@@ -186,6 +201,7 @@ class QueryService {
         documentId,
         threshold,
         enableHybrid,
+        allowedDocumentIds: allowedDocIds,
       });
       rawChunks = hybridRes.results || [];
     } else {
@@ -195,6 +211,7 @@ class QueryService {
         topK: topK || RAG_CONFIG.vectorTopK,
         documentId,
         threshold,
+        allowedDocumentIds: allowedDocIds,
       });
       rawChunks = searchResult.results || [];
     }

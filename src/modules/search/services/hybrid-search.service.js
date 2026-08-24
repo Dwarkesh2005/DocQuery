@@ -7,12 +7,8 @@ const { RAG_CONFIG } = require('../../../config/rag.config');
 
 // ============================================================
 // Hybrid Search Service — Parallel Semantic + Lexical Fusion
+// Phase 9: Enterprise Intelligence, Security & Scale
 // ============================================================
-// Executes dense vector search and sparse keyword search concurrently,
-// combining ranked outputs via Reciprocal Rank Fusion (RRF).
-//
-// Graceful Degradation: If vector search fails or keyword search fails,
-// the service automatically falls back to the surviving modality.
 
 class HybridSearchService {
   /**
@@ -37,6 +33,7 @@ class HybridSearchService {
    * @param {string} [params.documentId] - Optional document filter
    * @param {number} [params.threshold] - Vector similarity threshold
    * @param {boolean} [params.enableHybrid] - Enable or disable keyword fusion
+   * @param {string[]} [params.allowedDocumentIds] - Optional permitted document IDs
    * @returns {Promise<{ query: string, results: Array<object>, metadata: object }>}
    */
   async search({
@@ -46,8 +43,23 @@ class HybridSearchService {
     documentId = null,
     threshold = env.SEARCH_SIMILARITY_THRESHOLD,
     enableHybrid = env.ENABLE_HYBRID_SEARCH !== false,
+    allowedDocumentIds = null,
   }) {
     const startTime = Date.now();
+
+    if (Array.isArray(allowedDocumentIds) && allowedDocumentIds.length === 0) {
+      return {
+        query,
+        results: [],
+        metadata: {
+          strategy: 'EMPTY_PERMISSIONS',
+          vectorResultsCount: 0,
+          keywordResultsCount: 0,
+          fusedResultsCount: 0,
+          durationMs: Date.now() - startTime,
+        },
+      };
+    }
 
     // If hybrid is disabled, fall back immediately to pure vector search
     if (!enableHybrid) {
@@ -57,6 +69,7 @@ class HybridSearchService {
         topK,
         documentId,
         threshold,
+        allowedDocumentIds,
       });
 
       return {
@@ -80,12 +93,14 @@ class HybridSearchService {
         topK: RAG_CONFIG.vectorTopK,
         documentId,
         threshold,
+        allowedDocumentIds,
       }),
       this.keywordSearch.search({
         organizationId,
         query,
         topK: RAG_CONFIG.keywordTopK,
         documentId,
+        allowedDocumentIds,
       }),
     ]);
 

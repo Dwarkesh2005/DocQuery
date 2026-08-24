@@ -16,5 +16,7 @@ router.use(authenticate);
 router.post('/', validate(createOrganizationSchema), organizationController.create);
 router.get('/', organizationController.list);
 router.get('/:id', validate(organizationIdParamSchema), organizationController.getById);
+router.get('/:id/quota', validate(organizationIdParamSchema), organizationController.getQuota);
+router.get('/:id/usage', validate(organizationIdParamSchema), organizationController.getUsage);
 
 module.exports = router;

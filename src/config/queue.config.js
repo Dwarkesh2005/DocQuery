@@ -3,23 +3,15 @@ const { getRedisClient, isRedisReady } = require('./redis');
 
 // ============================================================
 // BullMQ Queue Configuration
+// Phase 9: Enterprise Intelligence, Security & Scale
 // ============================================================
-// Defines the application's job queues. Each queue handles a
-// specific category of background work. All queues share the
-// singleton Redis connection and a common namespace prefix.
-//
-// Note: BullMQ queue names MUST NOT contain colons (:).
-// The prefix option is used for Redis key namespacing instead.
-//
-// Queues:
-//   - audit: Audit log events (member changes, org changes)
-//   - notification: Email / notification processing
-//   - document: Document processing & AI analysis (future)
 
 let auditQueue = null;
 let notificationQueue = null;
 let documentQueue = null;
 let evaluationQueue = null;
+let intelligenceQueue = null;
+let entityQueue = null;
 
 const QUEUE_PREFIX = 'docquery';
 
@@ -28,6 +20,8 @@ const QUEUE_NAMES = {
   NOTIFICATION: 'notification',
   DOCUMENT: 'document',
   EVALUATION: 'evaluation',
+  DOCUMENT_INTELLIGENCE: 'document-intelligence',
+  ENTITY_EXTRACTION: 'entity-extraction',
 };
 
 const DEFAULT_JOB_OPTIONS = {
@@ -36,13 +30,10 @@ const DEFAULT_JOB_OPTIONS = {
     type: 'exponential',
     delay: 1000, // 1s base → 2s → 4s → 8s → 16s
   },
-  removeOnComplete: { count: 1000 },    // Keep last 1000 completed
-  removeOnFail: { count: 5000 },         // Keep last 5000 failed for debugging
+  removeOnComplete: { count: 1000 },
+  removeOnFail: { count: 5000 },
 };
 
-/**
- * Get or create the audit queue.
- */
 function getAuditQueue() {
   if (!isRedisReady()) return null;
   if (!auditQueue) {
@@ -55,9 +46,6 @@ function getAuditQueue() {
   return auditQueue;
 }
 
-/**
- * Get or create the notification queue.
- */
 function getNotificationQueue() {
   if (!isRedisReady()) return null;
   if (!notificationQueue) {
@@ -70,9 +58,6 @@ function getNotificationQueue() {
   return notificationQueue;
 }
 
-/**
- * Get or create the document queue.
- */
 function getDocumentQueue() {
   if (!isRedisReady()) return null;
   if (!documentQueue) {
@@ -88,9 +73,6 @@ function getDocumentQueue() {
   return documentQueue;
 }
 
-/**
- * Get or create the evaluation queue.
- */
 function getEvaluationQueue() {
   if (!isRedisReady()) return null;
   if (!evaluationQueue) {
@@ -106,16 +88,46 @@ function getEvaluationQueue() {
   return evaluationQueue;
 }
 
-/**
- * Close all queues gracefully.
- */
+function getIntelligenceQueue() {
+  if (!isRedisReady()) return null;
+  if (!intelligenceQueue) {
+    intelligenceQueue = new Queue(QUEUE_NAMES.DOCUMENT_INTELLIGENCE, {
+      connection: getRedisClient(),
+      prefix: QUEUE_PREFIX,
+      defaultJobOptions: DEFAULT_JOB_OPTIONS,
+    });
+  }
+  return intelligenceQueue;
+}
+
+function getEntityQueue() {
+  if (!isRedisReady()) return null;
+  if (!entityQueue) {
+    entityQueue = new Queue(QUEUE_NAMES.ENTITY_EXTRACTION, {
+      connection: getRedisClient(),
+      prefix: QUEUE_PREFIX,
+      defaultJobOptions: DEFAULT_JOB_OPTIONS,
+    });
+  }
+  return entityQueue;
+}
+
 async function closeQueues() {
-  const queues = [auditQueue, notificationQueue, documentQueue, evaluationQueue].filter(Boolean);
+  const queues = [
+    auditQueue,
+    notificationQueue,
+    documentQueue,
+    evaluationQueue,
+    intelligenceQueue,
+    entityQueue,
+  ].filter(Boolean);
   await Promise.all(queues.map((q) => q.close()));
   auditQueue = null;
   notificationQueue = null;
   documentQueue = null;
   evaluationQueue = null;
+  intelligenceQueue = null;
+  entityQueue = null;
 }
 
 module.exports = {
@@ -126,5 +138,7 @@ module.exports = {
   getNotificationQueue,
   getDocumentQueue,
   getEvaluationQueue,
+  getIntelligenceQueue,
+  getEntityQueue,
   closeQueues,
 };

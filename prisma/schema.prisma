@@ -1,6 +1,6 @@
 // ============================================================
 // DocQuery — Prisma Schema
-// Phase 1: Authentication & Multi-Tenancy
+// Phase 9: Enterprise Intelligence, Security & Scale
 // ============================================================
 
 generator client {
@@ -20,6 +20,7 @@ enum OrganizationRole {
   OWNER
   ADMIN
   MEMBER
+  VIEWER
 }
 
 enum DocumentStatus {
@@ -43,12 +44,30 @@ enum EvaluationStatus {
   CANCELLED
 }
 
+enum PermissionGranteeType {
+  USER
+  ROLE
+  ORGANIZATION
+}
+
+enum PermissionLevel {
+  READ
+  WRITE
+  ADMIN
+}
+
+enum QuotaPlan {
+  FREE
+  PRO
+  TEAM
+  ENTERPRISE
+}
+
 // ============================================================
 // User
 // ============================================================
 // Core identity model. A user can belong to multiple
 // organizations via OrganizationMember (junction table).
-// organizationId is intentionally NOT on this model.
 
 model User {
   id           String   @id @default(uuid()) @db.Uuid
@@ -59,10 +78,14 @@ model User {
   updatedAt    DateTime @updatedAt @map("updated_at")
 
   // Relations
-  memberships   OrganizationMember[]
-  refreshTokens RefreshToken[]
-  documents     Document[]
-  conversations Conversation[]
+  memberships         OrganizationMember[]
+  refreshTokens       RefreshToken[]
+  documents           Document[]
+  conversations       Conversation[]
+  apiKeys             ApiKey[]
+  auditLogs           AuditLog[]
+  documentPermissions DocumentPermission[]
+  documentVersions    DocumentVersion[]
 
   @@map("users")
 }
@@ -70,21 +93,29 @@ model User {
 // ============================================================
 // Organization
 // ============================================================
-// Represents a tenant / workspace. All future resources
-// (documents, queries, etc.) will be scoped to an organization.
+// Represents an enterprise tenant / workspace.
 
 model Organization {
   id        String   @id @default(uuid()) @db.Uuid
   name      String
+  slug      String?  @unique
+  status    String   @default("ACTIVE")
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
   // Relations
-  memberships        OrganizationMember[]
-  documents          Document[]
-  conversations      Conversation[]
-  evaluationDatasets EvaluationDataset[]
-  evaluationRuns     EvaluationRun[]
+  memberships          OrganizationMember[]
+  documents            Document[]
+  conversations        Conversation[]
+  evaluationDatasets   EvaluationDataset[]
+  evaluationRuns       EvaluationRun[]
+  apiKeys              ApiKey[]
+  auditLogs            AuditLog[]
+  entities             Entity[]
+  entityRelations      EntityRelation[]
+  usageRecords         UsageRecord[]
+  usageDailyAggregates UsageDailyAggregate[]
+  quota                OrganizationQuota?
 
   @@map("organizations")
 }
@@ -93,17 +124,17 @@ model Organization {
 // OrganizationMember (Junction Table)
 // ============================================================
 // Links users to organizations with a specific role.
-// The @@unique constraint prevents duplicate memberships
-// at the database level.
 
 model OrganizationMember {
   id             String           @id @default(uuid()) @db.Uuid
   userId         String           @map("user_id") @db.Uuid
   organizationId String           @map("organization_id") @db.Uuid
   role           OrganizationRole @default(MEMBER)
+  status         String           @default("ACTIVE")
   createdAt      DateTime         @default(now()) @map("created_at")
+  updatedAt      DateTime         @default(now()) @updatedAt @map("updated_at")
 
-  // Relations — cascade delete when User or Organization is removed
+  // Relations
   user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
@@ -117,8 +148,6 @@ model OrganizationMember {
 // ============================================================
 // RefreshToken
 // ============================================================
-// Persisted refresh tokens enable secure logout (revocation),
-// token replay detection, and future refresh-token rotation.
 
 model RefreshToken {
   id        String   @id @default(uuid()) @db.Uuid
@@ -140,7 +169,7 @@ model RefreshToken {
 // ============================================================
 // Document
 // ============================================================
-// Represents an uploaded document scoped to an organization (tenant).
+// Represents an uploaded document scoped to an organization.
 
 model Document {
   id                 String         @id @default(uuid()) @db.Uuid
@@ -150,6 +179,7 @@ model Document {
   filePath           String         @map("file_path")
   fileSize           Int            @map("file_size")
   mimeType           String         @map("mime_type")
+  contentHash        String?        @map("content_hash")
   status             DocumentStatus @default(UPLOADED)
   errorMessage       String?        @map("error_message")
   processingAttempts Int            @default(0) @map("processing_attempts")
@@ -159,21 +189,24 @@ model Document {
   updatedAt          DateTime       @updatedAt @map("updated_at")
 
   // Relations
-  organization   Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  user           User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization   Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user           User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
   chunks         DocumentChunk[]
   messageSources MessageSource[]
+  permissions    DocumentPermission[]
+  versions       DocumentVersion[]
+  intelligence   DocumentIntelligence?
 
   @@index([organizationId])
   @@index([userId])
   @@index([organizationId, status])
+  @@index([contentHash])
   @@map("documents")
 }
 
 // ============================================================
 // DocumentChunk
 // ============================================================
-// Represents a chunk of extracted text with its vector embedding.
 
 model DocumentChunk {
   id         String                       @id @default(uuid()) @db.Uuid
@@ -198,8 +231,6 @@ model DocumentChunk {
 // ============================================================
 // Conversation
 // ============================================================
-// Represents a multi-turn conversation session owned by a user
-// within an organization.
 
 model Conversation {
   id             String   @id @default(uuid()) @db.Uuid
@@ -224,7 +255,6 @@ model Conversation {
 // ============================================================
 // Message
 // ============================================================
-// Represents a single turn (user or assistant) in a conversation.
 
 model Message {
   id             String          @id @default(uuid()) @db.Uuid
@@ -245,7 +275,6 @@ model Message {
 // ============================================================
 // MessageSource
 // ============================================================
-// Persisted source/citation metadata associated with an assistant message.
 
 model MessageSource {
   id           String   @id @default(uuid()) @db.Uuid
@@ -271,8 +300,6 @@ model MessageSource {
 // Phase 8: RAG Evaluation Models
 // ============================================================
 
-// ── EvaluationDataset ──
-// Represents a curated set of test questions/cases scoped to an organization.
 model EvaluationDataset {
   id             String   @id @default(uuid()) @db.Uuid
   organizationId String   @map("organization_id") @db.Uuid
@@ -290,14 +317,12 @@ model EvaluationDataset {
   @@map("evaluation_datasets")
 }
 
-// ── EvaluationCase ──
-// Represents an individual test query with ground truth answer/sources.
 model EvaluationCase {
   id              String   @id @default(uuid()) @db.Uuid
   datasetId       String   @map("dataset_id") @db.Uuid
   question        String
   expectedAnswer  String?  @map("expected_answer")
-  expectedSources Json?    @map("expected_sources") // Array of document IDs / chunk IDs
+  expectedSources Json?    @map("expected_sources")
   metadata        Json?
   createdAt       DateTime @default(now()) @map("created_at")
 
@@ -309,22 +334,21 @@ model EvaluationCase {
   @@map("evaluation_cases")
 }
 
-// ── EvaluationRun ──
-// Represents an execution of an evaluation dataset against the RAG pipeline.
 model EvaluationRun {
-  id             String           @id @default(uuid()) @db.Uuid
-  organizationId String           @map("organization_id") @db.Uuid
-  datasetId      String           @map("dataset_id") @db.Uuid
-  status         EvaluationStatus @default(PENDING)
-  config         Json?            // Pipeline settings used for run
-  metrics        Json?            // Aggregated scores (Precision@K, Recall@K, MRR, Faithfulness, Relevance)
-  totalCases     Int              @default(0) @map("total_cases")
-  completedCases Int              @default(0) @map("completed_cases")
-  latencyMs      Int?             @map("latency_ms")
-  tokenUsage     Json?            @map("token_usage")
-  errorMessage   String?          @map("error_message")
-  createdAt      DateTime         @default(now()) @map("created_at")
-  updatedAt      DateTime         @updatedAt @map("updated_at")
+  id                 String           @id @default(uuid()) @db.Uuid
+  organizationId     String           @map("organization_id") @db.Uuid
+  datasetId          String           @map("dataset_id") @db.Uuid
+  status             EvaluationStatus @default(PENDING)
+  config             Json?
+  metrics            Json?
+  regressionDetected Boolean          @default(false) @map("regression_detected")
+  totalCases         Int              @default(0) @map("total_cases")
+  completedCases     Int              @default(0) @map("completed_cases")
+  latencyMs          Int?             @map("latency_ms")
+  tokenUsage         Json?            @map("token_usage")
+  errorMessage       String?          @map("error_message")
+  createdAt          DateTime         @default(now()) @map("created_at")
+  updatedAt          DateTime         @updatedAt @map("updated_at")
 
   // Relations
   organization Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
@@ -337,8 +361,6 @@ model EvaluationRun {
   @@map("evaluation_runs")
 }
 
-// ── EvaluationResult ──
-// Detailed evaluation outputs for a specific question within a run.
 model EvaluationResult {
   id              String   @id @default(uuid()) @db.Uuid
   runId           String   @map("run_id") @db.Uuid
@@ -347,7 +369,7 @@ model EvaluationResult {
   generatedAnswer String?  @map("generated_answer")
   retrievedChunks Json?    @map("retrieved_chunks")
   citations       Json?
-  scores          Json?    // { precisionAtK, recallAtK, mrr, hitRate, faithfulness, relevance, contextUtilization }
+  scores          Json?
   latencyMs       Int?     @map("latency_ms")
   passed          Boolean  @default(true)
   errorMessage    String?  @map("error_message")
@@ -362,5 +384,235 @@ model EvaluationResult {
   @@map("evaluation_results")
 }
 
+// ============================================================
+// Phase 9: Enterprise Models
+// ============================================================
 
+// ── DocumentPermission ──
+// Resource-level access control for documents.
+model DocumentPermission {
+  id          String                @id @default(uuid()) @db.Uuid
+  documentId  String                @map("document_id") @db.Uuid
+  granteeType PermissionGranteeType @map("grantee_type")
+  granteeId   String?               @map("grantee_id") @db.Uuid
+  granteeRole OrganizationRole?     @map("grantee_role")
+  permission  PermissionLevel       @default(READ)
+  createdAt   DateTime              @default(now()) @map("created_at")
 
+  // Relations
+  document Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  user     User?    @relation(fields: [granteeId], references: [id], onDelete: Cascade)
+
+  @@index([documentId])
+  @@index([granteeId])
+  @@index([documentId, granteeType])
+  @@map("document_permissions")
+}
+
+// ── ApiKey ──
+// Developer API keys with scopes, hashing, expiration, and revocation.
+model ApiKey {
+  id             String    @id @default(uuid()) @db.Uuid
+  organizationId String    @map("organization_id") @db.Uuid
+  name           String
+  keyPrefix      String    @map("key_prefix")
+  hashedSecret   String    @map("hashed_secret")
+  scopes         Json      // Array of granted scope strings
+  expiresAt      DateTime? @map("expires_at")
+  lastUsedAt     DateTime? @map("last_used_at")
+  revokedAt      DateTime? @map("revoked_at")
+  createdBy      String    @map("created_by") @db.Uuid
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  // Relations
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  creator      User         @relation(fields: [createdBy], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([keyPrefix])
+  @@index([organizationId, revokedAt])
+  @@map("api_keys")
+}
+
+// ── DocumentVersion ──
+// Tracks historical revisions of documents with content checksums.
+model DocumentVersion {
+  id            String   @id @default(uuid()) @db.Uuid
+  documentId    String   @map("document_id") @db.Uuid
+  versionNumber Int      @map("version_number")
+  contentHash   String   @map("content_hash")
+  filePath      String   @map("file_path")
+  fileSize      Int      @map("file_size")
+  summary       String?
+  metadata      Json?
+  queryable     Boolean  @default(true)
+  createdBy     String   @map("created_by") @db.Uuid
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  // Relations
+  document Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  creator  User     @relation(fields: [createdBy], references: [id], onDelete: Cascade)
+
+  @@unique([documentId, versionNumber])
+  @@index([documentId])
+  @@index([contentHash])
+  @@map("document_versions")
+}
+
+// ── DocumentIntelligence ──
+// Extracted metadata, title, language, classification, summary, and sections.
+model DocumentIntelligence {
+  id             String   @id @default(uuid()) @db.Uuid
+  documentId     String   @unique @map("document_id") @db.Uuid
+  title          String?
+  language       String?  @default("en")
+  classification String?
+  summary        String?
+  sections       Json?    // Array of detected section objects
+  entities       Json?    // Extracted named entities
+  keywords       Json?    // Extracted key phrases
+  metadata       Json?
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  document Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@map("document_intelligence")
+}
+
+// ── Knowledge Graph: Entity ──
+model Entity {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  name           String
+  type           String   // e.g. "CONCEPT", "TECHNOLOGY", "ORGANIZATION", "PERSON"
+  metadata       Json?
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  organization Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  sourceOf     EntityRelation[] @relation("SourceEntity")
+  targetOf     EntityRelation[] @relation("TargetEntity")
+
+  @@unique([organizationId, name, type])
+  @@index([organizationId])
+  @@index([name])
+  @@map("entities")
+}
+
+// ── Knowledge Graph: EntityRelation ──
+model EntityRelation {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  sourceEntityId String   @map("source_entity_id") @db.Uuid
+  targetEntityId String   @map("target_entity_id") @db.Uuid
+  relationType   String   @map("relation_type") // e.g. "USES", "DEVELOPED_BY", "RELATED_TO"
+  confidence     Float    @default(1.0)
+  metadata       Json?
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  // Relations
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  sourceEntity Entity       @relation("SourceEntity", fields: [sourceEntityId], references: [id], onDelete: Cascade)
+  targetEntity Entity       @relation("TargetEntity", fields: [targetEntityId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, sourceEntityId, targetEntityId, relationType])
+  @@index([organizationId])
+  @@index([sourceEntityId])
+  @@index([targetEntityId])
+  @@map("entity_relations")
+}
+
+// ── AuditLog ──
+// Immutable audit trail for compliance.
+model AuditLog {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  userId         String?  @map("user_id") @db.Uuid
+  action         String
+  resourceType   String   @map("resource_type")
+  resourceId     String?  @map("resource_id")
+  requestId      String?  @map("request_id")
+  ipAddress      String?  @map("ip_address")
+  userAgent      String?  @map("user_agent")
+  metadata       Json?
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  // Relations
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User?        @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId])
+  @@index([action])
+  @@index([resourceType, resourceId])
+  @@index([organizationId, createdAt])
+  @@map("audit_logs")
+}
+
+// ── UsageRecord ──
+// Event-level usage accounting for metering and billing.
+model UsageRecord {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  userId         String?  @map("user_id") @db.Uuid
+  eventType      String   @map("event_type") // "QUERY", "EMBEDDING", "STORAGE", "API_REQUEST", "LLM_TOKENS"
+  quantity       Int      @default(1)
+  units          String   // "COUNT", "TOKENS", "BYTES"
+  metadata       Json?
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  // Relations
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([eventType])
+  @@index([organizationId, createdAt])
+  @@map("usage_records")
+}
+
+// ── UsageDailyAggregate ──
+// Daily rolled-up metrics for rapid quota checks and dashboarding.
+model UsageDailyAggregate {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  date           String   // YYYY-MM-DD
+  queriesCount   Int      @default(0) @map("queries_count")
+  inputTokens    Int      @default(0) @map("input_tokens")
+  outputTokens   Int      @default(0) @map("output_tokens")
+  embeddingsCount Int     @default(0) @map("embeddings_count")
+  storageBytes   BigInt   @default(0) @map("storage_bytes")
+  apiRequests    Int      @default(0) @map("api_requests")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, date])
+  @@index([organizationId])
+  @@map("usage_daily_aggregates")
+}
+
+// ── OrganizationQuota ──
+// Configurable tenant limits based on pricing tiers.
+model OrganizationQuota {
+  id                 String    @id @default(uuid()) @db.Uuid
+  organizationId     String    @unique @map("organization_id") @db.Uuid
+  plan               QuotaPlan @default(FREE)
+  maxDocuments       Int       @default(100) @map("max_documents")
+  maxStorageBytes    BigInt    @default(524288000) @map("max_storage_bytes") // 500MB
+  maxQueriesPerMonth Int       @default(1000) @map("max_queries_per_month")
+  maxTokensPerMonth  Int       @default(1000000) @map("max_tokens_per_month")
+  maxApiRequests     Int       @default(10000) @map("max_api_requests")
+  maxMembers         Int       @default(5) @map("max_members")
+  createdAt          DateTime  @default(now()) @map("created_at")
+  updatedAt          DateTime  @updatedAt @map("updated_at")
+
+  // Relations
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@map("organization_quotas")
+}

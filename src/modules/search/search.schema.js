@@ -3,7 +3,16 @@ const { env } = require('../../config/env');
 
 // ============================================================
 // Search Validation Schemas
+// Phase 9: Enterprise Intelligence, Security & Scale
 // ============================================================
+
+const searchFiltersSchema = z.object({
+  documentIds: z.array(z.string().uuid()).optional(),
+  documentTypes: z.array(z.string()).optional(),
+  tags: z.array(z.string()).optional(),
+  dateFrom: z.string().datetime().optional().nullable(),
+  dateTo: z.string().datetime().optional().nullable(),
+}).optional();
 
 const searchRequestSchema = z.object({
   body: z.object({
@@ -21,15 +30,16 @@ const searchRequestSchema = z.object({
       })
       .int('topK must be an integer')
       .positive('topK must be greater than 0')
-      .max(env.SEARCH_MAX_TOP_K, `topK cannot exceed ${env.SEARCH_MAX_TOP_K}`)
+      .max(env.SEARCH_MAX_TOP_K || 100, `topK cannot exceed ${env.SEARCH_MAX_TOP_K || 100}`)
       .optional()
-      .default(env.SEARCH_DEFAULT_TOP_K),
+      .default(env.SEARCH_DEFAULT_TOP_K || 5),
     documentId: z
       .string({
         invalid_type_error: 'documentId must be a string',
       })
       .uuid('Invalid document ID format')
       .optional(),
+    filters: searchFiltersSchema,
     threshold: z
       .number({
         invalid_type_error: 'threshold must be a number',
@@ -42,4 +52,5 @@ const searchRequestSchema = z.object({
 
 module.exports = {
   searchRequestSchema,
+  searchFiltersSchema,
 };

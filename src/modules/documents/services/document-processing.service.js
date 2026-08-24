@@ -121,12 +121,41 @@ class DocumentProcessingService {
       logger.info({ documentId, chunkCount: chunks.length }, 'Storing chunks and pgvector embeddings');
       await this.chunkRepo.saveChunksWithEmbeddings(documentId, chunksWithEmbeddings);
 
+      // 10.5 Enterprise Document Intelligence & Versioning
+      const { documentIntelligenceService } = require('./document-intelligence.service');
+      const { documentVersionService } = require('./document-version.service');
+      
+      let contentHash = null;
+      try {
+        contentHash = documentVersionService.calculateHash(document.filePath);
+        await documentVersionService.createVersion({
+          documentId,
+          contentHash,
+          filePath: document.filePath,
+          fileSize: document.fileSize,
+          summary: null,
+          createdBy: document.userId,
+        });
+      } catch (err) {
+        logger.warn({ error: err.message, documentId }, 'Version creation non-fatal error');
+      }
+
+      // Extract and persist document intelligence asynchronously/gracefully
+      await documentIntelligenceService.processAndPersist({
+        documentId,
+        text: cleanedText,
+        filename: document.name,
+      }).catch((err) => {
+        logger.warn({ error: err.message, documentId }, 'Intelligence extraction non-fatal error');
+      });
+
       // 11. Mark document as READY
       await this.docRepo.updateStatus(documentId, 'READY', {
         errorMessage: null,
         pageCount: extractionResult.pageCount || 1,
         metadata: {
           chunkCount: chunks.length,
+          contentHash,
           processedAt: new Date().toISOString(),
         },
       });

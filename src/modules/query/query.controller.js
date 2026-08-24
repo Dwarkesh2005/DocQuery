@@ -2,6 +2,7 @@ const { queryService } = require('./query.service');
 
 // ============================================================
 // Query Controller — Thin HTTP Layer
+// Phase 9: Enterprise Intelligence, Security & Scale
 // ============================================================
 
 /**
@@ -29,6 +30,8 @@ async function query(req, res, next) {
       answerMode,
       enableHybrid,
       enableReranking,
+      userId: req.user?.id,
+      userRole: req.membership?.role,
     });
 
     res.status(200).json({

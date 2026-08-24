@@ -7,8 +7,10 @@ const { env } = require('../../config/env');
 
 // ============================================================
 // Search Service
+// Phase 9: Enterprise Intelligence, Security & Scale
 // ============================================================
-// Orchestrates query vector generation and tenant-isolated pgvector search.
+// Orchestrates query vector generation and tenant-isolated pgvector search
+// with pre-retrieval document access control.
 
 class SearchService {
   /**
@@ -30,6 +32,7 @@ class SearchService {
    * @param {number} [params.topK] - Max results to return
    * @param {string} [params.documentId] - Optional document filter
    * @param {number} [params.threshold] - Optional similarity threshold override
+   * @param {string[]} [params.allowedDocumentIds] - Optional array of permitted document UUIDs
    * @returns {Promise<{ query: string, results: Array<{ chunkId: string, documentId: string, content: string, score: number, pageNumber: number | null, chunkIndex: number, metadata: object }> }>}
    */
   async search({
@@ -38,8 +41,14 @@ class SearchService {
     topK = env.SEARCH_DEFAULT_TOP_K,
     documentId = null,
     threshold = env.SEARCH_SIMILARITY_THRESHOLD,
+    allowedDocumentIds = null,
   }) {
     const startTime = Date.now();
+
+    // If permission pre-filter is empty array, return immediately
+    if (Array.isArray(allowedDocumentIds) && allowedDocumentIds.length === 0) {
+      return { query, results: [] };
+    }
 
     // 1. Verify document ownership if documentId is provided
     if (documentId) {
@@ -48,7 +57,6 @@ class SearchService {
         throw new NotFoundError('Document not found', 'DOCUMENT_NOT_FOUND');
       }
       if (document.status !== 'READY') {
-        // Document is not indexed/ready for search yet
         return {
           query,
           results: [],
@@ -66,6 +74,7 @@ class SearchService {
       topK,
       threshold,
       documentId,
+      allowedDocumentIds,
     });
 
     // 4. Format and structure results

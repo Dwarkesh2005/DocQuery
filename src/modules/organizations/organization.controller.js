@@ -1,7 +1,12 @@
 const organizationService = require('./organization.service');
+const { quotaService } = require('../../services/quota.service');
+const { usageMeteringService } = require('../../services/usage-metering.service');
+const { ForbiddenError } = require('../../utils/errors');
+const { prisma } = require('../../config/database');
 
 // ============================================================
 // Organization Controller — Thin HTTP Layer
+// Phase 9: Enterprise Intelligence, Security & Scale
 // ============================================================
 
 /**
@@ -10,6 +15,9 @@ const organizationService = require('./organization.service');
 async function create(req, res, next) {
   try {
     const organization = await organizationService.create(req.body, req.user.id);
+
+    // Initialize default quota for new organization
+    await quotaService.getOrCreateQuota(organization.id, 'FREE').catch(() => {});
 
     res.status(201).json({
       success: true,
@@ -52,4 +60,68 @@ async function getById(req, res, next) {
   }
 }
 
-module.exports = { create, list, getById };
+/**
+ * GET /api/v1/organizations/:id/quota
+ */
+async function getQuota(req, res, next) {
+  try {
+    const membership = await prisma.organizationMember.findUnique({
+      where: {
+        userId_organizationId: {
+          userId: req.user.id,
+          organizationId: req.params.id,
+        },
+      },
+    });
+
+    if (!membership) {
+      throw new ForbiddenError('Access denied to organization quota', 'ORG_ACCESS_DENIED');
+    }
+
+    const quota = await quotaService.getOrCreateQuota(req.params.id);
+
+    res.status(200).json({
+      success: true,
+      data: { quota },
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+/**
+ * GET /api/v1/organizations/:id/usage
+ */
+async function getUsage(req, res, next) {
+  try {
+    const membership = await prisma.organizationMember.findUnique({
+      where: {
+        userId_organizationId: {
+          userId: req.user.id,
+          organizationId: req.params.id,
+        },
+      },
+    });
+
+    if (!membership) {
+      throw new ForbiddenError('Access denied to organization usage', 'ORG_ACCESS_DENIED');
+    }
+
+    const usage = await usageMeteringService.getCurrentMonthlyUsage(req.params.id);
+
+    res.status(200).json({
+      success: true,
+      data: { usage },
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+module.exports = {
+  create,
+  list,
+  getById,
+  getQuota,
+  getUsage,
+};

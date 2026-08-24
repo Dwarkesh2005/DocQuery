@@ -3,20 +3,17 @@ const { prisma } = require('../config/database');
 
 // ============================================================
 // Organization Resolution Middleware
+// Phase 9: Enterprise Intelligence, Security & Scale
 // ============================================================
 // Reads X-Organization-Id header, verifies the authenticated
 // user's membership in that organization, and attaches both
 // the organization and membership to the request.
 //
 // MUST be used AFTER authenticate middleware.
-//
-// Request flow:
-//   req.user → X-Organization-Id → Membership Verification
-//   → req.organization + req.membership
 
 /**
  * @param {import('express').Request} req
- * @param {import('express').Response} res
+ * @param {import('express').Response} _res
  * @param {import('express').NextFunction} next
  */
 async function resolveOrganization(req, _res, next) {
@@ -26,7 +23,16 @@ async function resolveOrganization(req, _res, next) {
       throw new ForbiddenError('Authentication required before organization resolution', 'AUTH_REQUIRED');
     }
 
-    // 2. Read organization ID from header
+    // 2. If already resolved via API key
+    if (req.apiKey && req.organization) {
+      const explicitOrgId = req.headers['x-organization-id'];
+      if (explicitOrgId && explicitOrgId !== req.organization.id) {
+        throw new ForbiddenError('API key cannot access specified organization', 'ORG_ACCESS_DENIED');
+      }
+      return next();
+    }
+
+    // 3. Read organization ID from header
     const organizationId = req.headers['x-organization-id'];
 
     if (!organizationId || typeof organizationId !== 'string') {
@@ -45,10 +51,7 @@ async function resolveOrganization(req, _res, next) {
       );
     }
 
-    // 3. Find the user's membership in this organization
-    // This query simultaneously verifies:
-    //   - The organization exists
-    //   - The user is a member of it
+    // 4. Find the user's membership in this organization
     const membership = await prisma.organizationMember.findUnique({
       where: {
         userId_organizationId: {
@@ -61,15 +64,14 @@ async function resolveOrganization(req, _res, next) {
       },
     });
 
-    if (!membership) {
-      // Intentionally vague — don't reveal whether org exists
+    if (!membership || membership.status === 'SUSPENDED') {
       throw new ForbiddenError(
         'You do not have access to this organization',
         'ORG_ACCESS_DENIED',
       );
     }
 
-    // 4. Attach to request
+    // 5. Attach to request
     req.organization = membership.organization;
     req.membership = membership;
 

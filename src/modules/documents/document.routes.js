@@ -63,14 +63,33 @@ const upload = multer({
 
 const router = Router();
 
-// All document endpoints require authentication and active tenant resolution
-router.use(authenticate, resolveOrganization);
+// POST /api/v1/documents (Upload document: authenticate -> drain/upload -> resolveOrganization)
+router.post(
+  '/',
+  authenticate,
+  (req, res, next) => {
+    upload.single('file')(req, res, (err) => {
+      if (err) return next(err);
+      resolveOrganization(req, res, next);
+    });
+  },
+  documentController.upload
+);
 
-// POST /api/v1/documents (Upload document)
-router.post('/', upload.single('file'), documentController.upload);
+// All subsequent document endpoints require authentication and active tenant resolution
+router.use(authenticate, resolveOrganization);
 
 // POST /api/v1/documents/:id/process (Enqueue processing job)
 router.post('/:id/process', validate(documentIdParamSchema), documentController.process);
+
+// GET /api/v1/documents/:id/permissions (List permissions on document)
+router.get('/:id/permissions', validate(documentIdParamSchema), documentController.listPermissions);
+
+// POST /api/v1/documents/:id/permissions (Grant permission on document)
+router.post('/:id/permissions', validate(documentIdParamSchema), documentController.grantPermission);
+
+// DELETE /api/v1/documents/:id/permissions/:permissionId (Revoke permission)
+router.delete('/:id/permissions/:permissionId', documentController.revokePermission);
 
 // GET /api/v1/documents/:id (Fetch document details & status)
 router.get('/:id', validate(documentIdParamSchema), documentController.getById);

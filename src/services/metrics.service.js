@@ -67,6 +67,15 @@ class MetricsService {
       totalDurationMs: 0,
       avgDurationMs: 0,
     };
+
+    this.evaluations = {
+      totalRuns: 0,
+      completedRuns: 0,
+      failedRuns: 0,
+      totalCasesEvaluated: 0,
+      totalDurationMs: 0,
+      avgRunDurationMs: 0,
+    };
   }
 
   /**
@@ -208,6 +217,29 @@ class MetricsService {
   }
 
   /**
+   * Record background evaluation run telemetry.
+   * @param {object} params
+   * @param {number} params.casesCount
+   * @param {number} params.durationMs
+   * @param {boolean} [params.success=true]
+   */
+  recordEvaluationRun({ casesCount = 0, durationMs = 0, success = true }) {
+    this.evaluations.totalRuns += 1;
+    this.evaluations.totalCasesEvaluated += casesCount;
+    this.evaluations.totalDurationMs += durationMs;
+
+    if (success) {
+      this.evaluations.completedRuns += 1;
+    } else {
+      this.evaluations.failedRuns += 1;
+    }
+
+    this.evaluations.avgRunDurationMs = Number(
+      (this.evaluations.totalDurationMs / this.evaluations.totalRuns).toFixed(2)
+    );
+  }
+
+  /**
    * Retrieve structured telemetry summary.
    * @returns {object}
    */
@@ -228,6 +260,7 @@ class MetricsService {
       llm: { ...this.llm },
       embeddings: { ...this.embeddings },
       workers: { ...this.workers },
+      evaluations: { ...this.evaluations },
     };
   }
 }

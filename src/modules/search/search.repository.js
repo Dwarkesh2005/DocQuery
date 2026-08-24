@@ -55,6 +55,53 @@ class SearchRepository {
 
     return rows;
   }
+
+  /**
+   * Perform PostgreSQL Full-Text Search (keyword search) on document chunks.
+   *
+   * @param {object} params
+   * @param {string} params.organizationId - Validated tenant UUID
+   * @param {string} params.query - Keyword search string
+   * @param {number} [params.topK=20] - Maximum chunks to return
+   * @param {string} [params.documentId] - Optional document UUID filter
+   * @returns {Promise<Array<{ chunkId: string, documentId: string, content: string, score: number, pageNumber: number | null, chunkIndex: number, metadata: object | null }>>}
+   */
+  async findKeywordChunks({
+    organizationId,
+    query,
+    topK = 20,
+    documentId = null,
+  }) {
+    if (!query || !query.trim()) return [];
+
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(organizationId);
+    if (!isUuid) return [];
+
+    const documentCondition = (documentId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(documentId))
+      ? Prisma.sql`AND d.id = ${documentId}::uuid`
+      : Prisma.empty;
+
+    const rows = await prisma.$queryRaw`
+      SELECT
+        dc.id AS "chunkId",
+        dc.document_id AS "documentId",
+        dc.content,
+        dc.chunk_index AS "chunkIndex",
+        dc.page_number AS "pageNumber",
+        dc.metadata,
+        ts_rank(to_tsvector('english', dc.content), plainto_tsquery('english', ${query})) AS score
+      FROM document_chunks dc
+      INNER JOIN documents d ON dc.document_id = d.id
+      WHERE d.organization_id = ${organizationId}::uuid
+        AND d.status = 'READY'::"DocumentStatus"
+        ${documentCondition}
+        AND to_tsvector('english', dc.content) @@ plainto_tsquery('english', ${query})
+      ORDER BY score DESC
+      LIMIT ${topK};
+    `;
+
+    return rows;
+  }
 }
 
 const searchRepository = new SearchRepository();
@@ -63,3 +110,4 @@ module.exports = {
   SearchRepository,
   searchRepository,
 };
+

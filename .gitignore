@@ -1,40 +1,65 @@
 # Dependencies
 node_modules/
+.pnp
+.pnp.js
 
-# Build output
+# Build & Bundling
 dist/
+build/
 
-# Environment
+# Environment Variables & Secrets
 .env
 .env.local
 .env.*.local
+.env.development.local
+.env.test.local
+.env.production.local
+!.env.example
 
-# Private / Interview Handbooks
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Testing & Coverage
+coverage/
+.nyc_output/
+*.lcov
+
+# Uploads & Temporary Storage
+uploads/*
+!uploads/.gitkeep
+tmp/
+temp/
+.tmp/
+*.tmp
+
+# Private Scripts & Handbooks
 .local/
 generate-handbook-pdf.js
 
-# IDE
+# IDE & Editor Configurations
 .vscode/
 .idea/
 *.swp
 *.swo
+*.sublime-project
+*.sublime-workspace
 
-# OS
+# Operating System Files
 .DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
 Thumbs.db
-
-# Logs
-*.log
-npm-debug.log*
-
-# Testing
-coverage/
+[Dd]esktop.ini
 
 # Prisma
 prisma/*.db
 prisma/*.db-journal
-
-# Uploads
-uploads/*
-!uploads/.gitkeep
-

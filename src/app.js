@@ -17,6 +17,7 @@ const documentRoutes = require('./modules/documents/document.routes');
 const searchRoutes = require('./modules/search/search.routes');
 const queryRoutes = require('./modules/query/query.routes');
 const conversationRoutes = require('./modules/conversations/conversation.routes');
+const evaluationRoutes = require('./modules/evaluations/evaluation.routes');
 const healthRoutes = require('./modules/health/health.routes');
 
 // ============================================================
@@ -89,6 +90,7 @@ app.use('/api/v1/documents', apiLimiter, documentRoutes);
 app.use('/api/v1/search', ragLimiter, searchRoutes);
 app.use('/api/v1/query', ragLimiter, queryRoutes);
 app.use('/api/v1/conversations', ragLimiter, conversationRoutes);
+app.use('/api/v1/evaluations', ragLimiter, evaluationRoutes);
 
 // ── 404 Handler ──
 app.use((_req, res) => {

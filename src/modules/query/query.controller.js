@@ -10,7 +10,15 @@ const { queryService } = require('./query.service');
  */
 async function query(req, res, next) {
   try {
-    const { query: userQuery, topK, documentId, threshold } = req.body;
+    const {
+      query: userQuery,
+      topK,
+      documentId,
+      threshold,
+      answerMode,
+      enableHybrid,
+      enableReranking,
+    } = req.body;
 
     const data = await queryService.query({
       organizationId: req.organization.id,
@@ -18,6 +26,9 @@ async function query(req, res, next) {
       topK,
       documentId,
       threshold,
+      answerMode,
+      enableHybrid,
+      enableReranking,
     });
 
     res.status(200).json({

@@ -35,6 +35,14 @@ enum MessageRole {
   ASSISTANT
 }
 
+enum EvaluationStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
 // ============================================================
 // User
 // ============================================================
@@ -72,9 +80,11 @@ model Organization {
   updatedAt DateTime @updatedAt @map("updated_at")
 
   // Relations
-  memberships   OrganizationMember[]
-  documents     Document[]
-  conversations Conversation[]
+  memberships        OrganizationMember[]
+  documents          Document[]
+  conversations      Conversation[]
+  evaluationDatasets EvaluationDataset[]
+  evaluationRuns     EvaluationRun[]
 
   @@map("organizations")
 }
@@ -256,5 +266,101 @@ model MessageSource {
   @@index([documentId])
   @@map("message_sources")
 }
+
+// ============================================================
+// Phase 8: RAG Evaluation Models
+// ============================================================
+
+// ── EvaluationDataset ──
+// Represents a curated set of test questions/cases scoped to an organization.
+model EvaluationDataset {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  name           String
+  description    String?
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  organization Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  cases        EvaluationCase[]
+  runs         EvaluationRun[]
+
+  @@index([organizationId])
+  @@map("evaluation_datasets")
+}
+
+// ── EvaluationCase ──
+// Represents an individual test query with ground truth answer/sources.
+model EvaluationCase {
+  id              String   @id @default(uuid()) @db.Uuid
+  datasetId       String   @map("dataset_id") @db.Uuid
+  question        String
+  expectedAnswer  String?  @map("expected_answer")
+  expectedSources Json?    @map("expected_sources") // Array of document IDs / chunk IDs
+  metadata        Json?
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  // Relations
+  dataset EvaluationDataset  @relation(fields: [datasetId], references: [id], onDelete: Cascade)
+  results EvaluationResult[]
+
+  @@index([datasetId])
+  @@map("evaluation_cases")
+}
+
+// ── EvaluationRun ──
+// Represents an execution of an evaluation dataset against the RAG pipeline.
+model EvaluationRun {
+  id             String           @id @default(uuid()) @db.Uuid
+  organizationId String           @map("organization_id") @db.Uuid
+  datasetId      String           @map("dataset_id") @db.Uuid
+  status         EvaluationStatus @default(PENDING)
+  config         Json?            // Pipeline settings used for run
+  metrics        Json?            // Aggregated scores (Precision@K, Recall@K, MRR, Faithfulness, Relevance)
+  totalCases     Int              @default(0) @map("total_cases")
+  completedCases Int              @default(0) @map("completed_cases")
+  latencyMs      Int?             @map("latency_ms")
+  tokenUsage     Json?            @map("token_usage")
+  errorMessage   String?          @map("error_message")
+  createdAt      DateTime         @default(now()) @map("created_at")
+  updatedAt      DateTime         @updatedAt @map("updated_at")
+
+  // Relations
+  organization Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  dataset      EvaluationDataset  @relation(fields: [datasetId], references: [id], onDelete: Cascade)
+  results      EvaluationResult[]
+
+  @@index([organizationId])
+  @@index([datasetId])
+  @@index([organizationId, status])
+  @@map("evaluation_runs")
+}
+
+// ── EvaluationResult ──
+// Detailed evaluation outputs for a specific question within a run.
+model EvaluationResult {
+  id              String   @id @default(uuid()) @db.Uuid
+  runId           String   @map("run_id") @db.Uuid
+  caseId          String   @map("case_id") @db.Uuid
+  question        String
+  generatedAnswer String?  @map("generated_answer")
+  retrievedChunks Json?    @map("retrieved_chunks")
+  citations       Json?
+  scores          Json?    // { precisionAtK, recallAtK, mrr, hitRate, faithfulness, relevance, contextUtilization }
+  latencyMs       Int?     @map("latency_ms")
+  passed          Boolean  @default(true)
+  errorMessage    String?  @map("error_message")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  // Relations
+  run  EvaluationRun  @relation(fields: [runId], references: [id], onDelete: Cascade)
+  case EvaluationCase @relation(fields: [caseId], references: [id], onDelete: Cascade)
+
+  @@index([runId])
+  @@index([caseId])
+  @@map("evaluation_results")
+}
+
 
 

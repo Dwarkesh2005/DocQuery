@@ -37,6 +37,11 @@ const queryRequestSchema = z.object({
       .min(0, 'threshold cannot be less than 0')
       .max(1, 'threshold cannot be greater than 1')
       .optional(),
+    answerMode: z
+      .enum(['STRICT', 'BALANCED', 'CONVERSATIONAL'])
+      .optional(),
+    enableHybrid: z.boolean().optional(),
+    enableReranking: z.boolean().optional(),
   }),
 });
 

@@ -7,6 +7,10 @@ const prisma = new PrismaClient();
  * Respects foreign key order.
  */
 async function cleanDatabase() {
+  await prisma.evaluationResult.deleteMany().catch(() => {});
+  await prisma.evaluationRun.deleteMany().catch(() => {});
+  await prisma.evaluationCase.deleteMany().catch(() => {});
+  await prisma.evaluationDataset.deleteMany().catch(() => {});
   await prisma.messageSource.deleteMany().catch(() => {});
   await prisma.message.deleteMany().catch(() => {});
   await prisma.conversation.deleteMany().catch(() => {});

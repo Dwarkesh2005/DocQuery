@@ -156,6 +156,32 @@ const envSchema = z.object({
     .default('10')
     .transform((val) => parseInt(val, 10))
     .pipe(z.number().positive()),
+
+  // Phase 8 — Advanced RAG & Evaluation
+  ENABLE_HYBRID_SEARCH: z
+    .string()
+    .default('true')
+    .transform((val) => val === 'true' || val === '1'),
+  ENABLE_QUERY_REWRITE: z
+    .string()
+    .default('true')
+    .transform((val) => val === 'true' || val === '1'),
+  ENABLE_RERANKING: z
+    .string()
+    .default('true')
+    .transform((val) => val === 'true' || val === '1'),
+  RERANKER_PROVIDER: z
+    .enum(['none', 'score', 'cohere'])
+    .default('score'),
+  COHERE_API_KEY: z.string().optional(),
+  RRF_K_CONSTANT: z
+    .string()
+    .default('60')
+    .transform((val) => parseInt(val, 10))
+    .pipe(z.number().positive()),
+  DEFAULT_ANSWER_MODE: z
+    .enum(['STRICT', 'BALANCED', 'CONVERSATIONAL'])
+    .default('STRICT'),
 });
 
 function loadEnv() {

@@ -19,6 +19,7 @@ const { getRedisClient, isRedisReady } = require('./redis');
 let auditQueue = null;
 let notificationQueue = null;
 let documentQueue = null;
+let evaluationQueue = null;
 
 const QUEUE_PREFIX = 'docquery';
 
@@ -26,6 +27,7 @@ const QUEUE_NAMES = {
   AUDIT: 'audit',
   NOTIFICATION: 'notification',
   DOCUMENT: 'document',
+  EVALUATION: 'evaluation',
 };
 
 const DEFAULT_JOB_OPTIONS = {
@@ -87,14 +89,33 @@ function getDocumentQueue() {
 }
 
 /**
+ * Get or create the evaluation queue.
+ */
+function getEvaluationQueue() {
+  if (!isRedisReady()) return null;
+  if (!evaluationQueue) {
+    evaluationQueue = new Queue(QUEUE_NAMES.EVALUATION, {
+      connection: getRedisClient(),
+      prefix: QUEUE_PREFIX,
+      defaultJobOptions: {
+        ...DEFAULT_JOB_OPTIONS,
+        attempts: 2,
+      },
+    });
+  }
+  return evaluationQueue;
+}
+
+/**
  * Close all queues gracefully.
  */
 async function closeQueues() {
-  const queues = [auditQueue, notificationQueue, documentQueue].filter(Boolean);
+  const queues = [auditQueue, notificationQueue, documentQueue, evaluationQueue].filter(Boolean);
   await Promise.all(queues.map((q) => q.close()));
   auditQueue = null;
   notificationQueue = null;
   documentQueue = null;
+  evaluationQueue = null;
 }
 
 module.exports = {
@@ -104,5 +125,6 @@ module.exports = {
   getAuditQueue,
   getNotificationQueue,
   getDocumentQueue,
+  getEvaluationQueue,
   closeQueues,
 };

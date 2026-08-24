@@ -151,6 +151,8 @@ function createDocumentWorker() {
   return worker;
 }
 
+const { createEvaluationWorker } = require('./evaluation.worker');
+
 /**
  * Start all background workers.
  */
@@ -158,6 +160,7 @@ function startWorkers() {
   createAuditWorker();
   createNotificationWorker();
   createDocumentWorker();
+  createEvaluationWorker();
   logger.info(`Started ${workers.length} BullMQ workers`);
 }
 
@@ -191,6 +194,8 @@ module.exports = {
   createAuditWorker,
   createNotificationWorker,
   createDocumentWorker,
+  createEvaluationWorker,
   workers,
 };
+
 

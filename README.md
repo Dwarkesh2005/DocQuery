@@ -1,315 +1,243 @@
 # DocQuery
 
-> Multi-tenant AI Document Intelligence & RAG SaaS Platform
+> Production-Grade Multi-Tenant AI Document Intelligence, Advanced RAG & Evaluation SaaS Platform
 
-[![Phase](https://img.shields.io/badge/Phase-1%20Complete-brightgreen)]()
+[![Phase](https://img.shields.io/badge/Phase-8%20Complete-brightgreen)]()
 [![Node.js](https://img.shields.io/badge/Node.js-22.x-green)]()
-[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-18-blue)]()
-[![Tests](https://img.shields.io/badge/Tests-44%20Passing-brightgreen)]()
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-18%20%2B%20pgvector-blue)]()
+[![Redis](https://img.shields.io/badge/Redis-BullMQ%20%2B%20Cache-red)]()
+[![Tests](https://img.shields.io/badge/Tests-249%20Passing%20(35%20Suites)-brightgreen)]()
+
+---
 
 ## Overview
 
-DocQuery is a backend-first, multi-tenant SaaS platform that will allow organizations to upload documents, process them asynchronously, extract and chunk text, generate embeddings, store vectors, perform semantic search, and generate answers using RAG (Retrieval-Augmented Generation).
+**DocQuery** is a high-performance, multi-tenant AI document intelligence and advanced Retrieval-Augmented Generation (RAG) backend. It enables organizations to upload complex documents, process and extract text asynchronously, index vector embeddings and full-text search tokens, execute hybrid multi-modal search, generate grounded answers with deterministic citations, manage conversational histories, and evaluate retrieval/generation accuracy using an automated benchmark subsystem.
 
-**Current Status: Phase 1 — Authentication & Multi-Tenancy ✅**
+---
 
-## Architecture
-
-```
-┌─────────────────────────────────────────────────────────┐
-│                     Express.js API                       │
-│                                                          │
-│  ┌──────────┐  ┌───────────────┐  ┌──────────────────┐  │
-│  │  Helmet   │  │     CORS      │  │   Body Parser    │  │
-│  └──────────┘  └───────────────┘  └──────────────────┘  │
-│                                                          │
-│  ┌──────────────────────────────────────────────────────┐│
-│  │              Middleware Chain                         ││
-│  │  validate → authenticate → resolveOrg → requireRole  ││
-│  └──────────────────────────────────────────────────────┘│
-│                                                          │
-│  ┌──────────┐  ┌───────────────┐  ┌──────────────────┐  │
-│  │   Auth    │  │ Organizations │  │    Members       │  │
-│  │  Module   │  │    Module     │  │    Module        │  │
-│  └────┬─────┘  └──────┬────────┘  └────────┬─────────┘  │
-│       │               │                     │            │
-│  ┌────┴───────────────┴─────────────────────┴─────────┐  │
-│  │              Service Layer (Business Logic)         │  │
-│  └────────────────────────┬────────────────────────────┘  │
-│                           │                               │
-│  ┌────────────────────────┴────────────────────────────┐  │
-│  │              Prisma ORM (Data Access)               │  │
-│  └────────────────────────┬────────────────────────────┘  │
-│                           │                               │
-│  ┌────────────────────────┴────────────────────────────┐  │
-│  │              PostgreSQL (Database)                  │  │
-│  └─────────────────────────────────────────────────────┘  │
-└──────────────────────────────────────────────────────────┘
-```
-
-### Key Principles
-
-- **Modular Architecture** — Feature modules with controller/service/routes separation
-- **Thin Controllers** — HTTP concerns only; business logic in services
-- **Tenant Isolation** — Every org-scoped query verified via membership
-- **RBAC** — Role-based middleware (OWNER → ADMIN → MEMBER)
-- **Security by Default** — Helmet, CORS, Zod validation, bcrypt, JWT
-
-## Tech Stack
-
-| Technology   | Purpose                  |
-|-------------|--------------------------|
-| Node.js      | Runtime                  |
-| Express.js   | HTTP framework           |
-| PostgreSQL   | Database                 |
-| Prisma ORM   | Data access & migrations |
-| JWT          | Stateless authentication |
-| bcrypt       | Password hashing         |
-| Zod          | Input validation         |
-| Helmet       | Security headers         |
-| CORS         | Cross-origin control     |
-| Jest         | Testing                  |
-| Supertest    | HTTP integration tests   |
-
-## Phase 1 Features
-
-- [x] User registration with default workspace
-- [x] User login with generic error messages
-- [x] JWT access tokens (short-lived)
-- [x] Refresh tokens (DB-persisted, revocable)
-- [x] Logout with refresh token revocation
-- [x] Current user endpoint with org memberships
-- [x] Organization CRUD
-- [x] Organization membership management
-- [x] Role-based access control (OWNER / ADMIN / MEMBER)
-- [x] Tenant isolation via server-side membership verification
-- [x] Zod request validation
-- [x] Centralized error handling
-- [x] bcrypt password hashing
-- [x] Database constraints (unique, indexes, cascades)
-- [x] Transactional operations (registration, org creation)
-- [x] API versioning (`/api/v1`)
-- [x] Security middleware (Helmet, CORS, body limits)
-- [x] 44 automated integration tests
-
-## Project Structure
+## System Architecture
 
 ```
-src/
-├── config/
-│   ├── env.js              # Zod-validated environment config
-│   └── database.js          # Singleton Prisma client
-├── middleware/
-│   ├── auth.middleware.js    # JWT authentication
-│   ├── organization.middleware.js  # Tenant resolution
-│   ├── role.middleware.js    # RBAC authorization
-│   ├── validate.middleware.js # Zod validation
-│   └── error.middleware.js   # Centralized error handler
-├── modules/
-│   ├── auth/
-│   │   ├── auth.controller.js
-│   │   ├── auth.service.js
-│   │   ├── auth.routes.js
-│   │   └── auth.schema.js
-│   ├── organizations/
-│   │   ├── organization.controller.js
-│   │   ├── organization.service.js
-│   │   ├── organization.routes.js
-│   │   └── organization.schema.js
-│   └── members/
-│       ├── member.controller.js
-│       ├── member.service.js
-│       ├── member.routes.js
-│       └── member.schema.js
-├── utils/
-│   ├── jwt.js               # Token generation & verification
-│   ├── password.js           # bcrypt utilities
-│   └── errors.js             # Application error classes
-├── app.js                    # Express application setup
-└── server.js                 # Server startup & shutdown
-
-prisma/
-└── schema.prisma             # Database schema
-
-tests/
-├── setup.js
-├── auth.test.js
-├── organization.test.js
-├── member.test.js
-└── tenant-isolation.test.js
+                                 Client Request
+                                       │
+                                       ▼
+                     ┌──────────────────────────────────┐
+                     │     Express.js API Gateway       │
+                     │  (Rate Limiting, Tracing, CORS)  │
+                     └─────────────────┬────────────────┘
+                                       │
+                    Tenant Context & Authentication Middleware
+                                       │
+         ┌─────────────────────────────┼─────────────────────────────┐
+         ▼                             ▼                             ▼
+┌──────────────────┐         ┌──────────────────┐         ┌──────────────────────┐
+│ Document Ingestion│         │  Advanced RAG    │         │  Evaluation Engine   │
+│  & Queue Worker  │         │     Pipeline     │         │   & Benchmarking     │
+└────────┬─────────┘         └─────────┬────────┘         └──────────┬───────────┘
+         │                             │                             │
+         ▼                             ▼                             ▼
+┌────────────────────────────────────────────────────────────────────────────────┐
+│                          Core RAG Orchestration Layer                          │
+│                                                                                │
+│  [Query Understanding] ──► [Query Rewriting] ──► [Parallel Hybrid Retrieval]   │
+│                                                          │                     │
+│       ┌──────────────────────────────────────────────────┴───────────────┐     │
+│       ▼                                                                  ▼     │
+│  Dense Vector Search                                            Sparse Lexical │
+│   (pgvector Cosine)                                            (PostgreSQL FTS)│
+│       └──────────────────────────────────┬───────────────────────────────┘     │
+│                                          ▼                                     │
+│                            [Reciprocal Rank Fusion (RRF)]                      │
+│                                          │                                     │
+│                                          ▼                                     │
+│                            [Score / Cohere Reranking]                          │
+│                                          │                                     │
+│                                          ▼                                     │
+│                            [Context Selection & Budgeting]                     │
+│                                          │                                     │
+│                                          ▼                                     │
+│                            [Grounded LLM Generation]                           │
+│                      (STRICT | BALANCED | CONVERSATIONAL)                      │
+│                                          │                                     │
+│                                          ▼                                     │
+│                            [Deterministic Citations]                           │
+└──────────────────────────────────────┬─────────────────────────────────────────┘
+                                       │
+                                       ▼
+┌────────────────────────────────────────────────────────────────────────────────┐
+│                         Persistence & Infrastructure                           │
+│                                                                                │
+│   PostgreSQL + pgvector           Redis Cache & Rate Limiting        BullMQ    │
+│  (Docs, Chunks, Evaluations)       (Tenant-Isolated Keys)           (Workers)  │
+└────────────────────────────────────────────────────────────────────────────────┘
 ```
 
-## Setup
+---
+
+## Key Capabilities Across Phases
+
+### Phase 1: Authentication & Multi-Tenancy
+* Strict tenant isolation via server-side organization membership verification (`X-Organization-Id`).
+* Role-Based Access Control (`OWNER`, `ADMIN`, `MEMBER`).
+* Stateless short-lived JWT access tokens and database-persisted refresh tokens.
+
+### Phase 2: Document Ingestion & Storage
+* Multi-part file uploads (PDF, TXT, MD, DOCX) with magic number MIME verification.
+* SHA-256 deduplication and status lifecycle tracking (`PENDING`, `PROCESSING`, `READY`, `FAILED`).
+
+### Phase 3: Document Intelligence & Chunking
+* Text extraction with line normalization, control character removal, and OCR preservation.
+* Token-aware recursive sliding window chunking with configurable overlap.
+* Batched embedding generation (OpenAI `text-embedding-3-small` / Mock).
+
+### Phase 4: Semantic Search & Vector Storage
+* PostgreSQL `pgvector` extension utilizing cosine distance indexing (`<=>`).
+* Tenant-isolated vector similarity retrieval with configurable similarity thresholds.
+
+### Phase 5: Grounded RAG Answer Generation
+* Prompt injection defense using isolated `<<<UNTRUSTED_DOCUMENT_CONTENT>>>` boundaries.
+* Deterministic citation mapping (document ID, chunk ID, page number, quotes).
+
+### Phase 6: Conversations & Query History
+* Persistent conversational threads with message history and context tracking.
+* Query audit history and telemetry.
+
+### Phase 7: Production Hardening & Observability
+* Tenant-isolated Redis response caching with automatic invalidation on document updates.
+* Multi-tiered rate limiters (Auth, API, RAG).
+* BullMQ asynchronous background workers with retry backoff.
+* Request correlation IDs (`X-Request-Id`) and structured Prometheus-compatible metrics.
+
+### Phase 8: Advanced RAG & Evaluation
+* **Query Understanding**: Intent classifier (`factual`, `summarization`, `comparison`, `procedural`, `conversational`, `ambiguous`), entity and keyword extraction.
+* **Query Rewriting**: Contextual pronoun and follow-up resolution from conversational history.
+* **Hybrid Retrieval & RRF**: Parallel dense semantic + sparse lexical full-text search fused with Reciprocal Rank Fusion ($k=60$).
+* **Reranking Layer**: Fast local `ScoreReranker` and optional `CohereReranker`.
+* **Context Selection**: Token budget optimization, chunk caps, and document diversity guarantees.
+* **Answer Modes**: `STRICT` (no hallucinations), `BALANCED`, and `CONVERSATIONAL`.
+* **Evaluation Subsystem**: Precision@K, Recall@K, MRR, Hit Rate, Faithfulness, Answer Relevance, Context Utilization, and comparative A/B benchmarking.
+
+---
+
+## API Reference
+
+All endpoints are versioned under `/api/v1`.
+
+### Authentication (`/api/v1/auth`)
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| `POST` | `/auth/register` | No | Register user & create default workspace |
+| `POST` | `/auth/login` | No | Authenticate credentials & issue tokens |
+| `POST` | `/auth/refresh` | No | Refresh access token |
+| `POST` | `/auth/logout` | Yes | Revoke refresh token |
+| `GET` | `/auth/me` | Yes | Get authenticated user profile & memberships |
+
+### Organizations & Members (`/api/v1/organizations`)
+| Method | Path | Auth | Roles | Description |
+|---|---|---|---|---|
+| `POST` | `/organizations` | Yes | — | Create new organization |
+| `GET` | `/organizations` | Yes | — | List user organizations |
+| `GET` | `/organizations/:id` | Yes | Any | Get organization details |
+| `GET` | `/organizations/:id/members` | Yes | Any | List organization members |
+| `POST` | `/organizations/:id/members` | Yes | OWNER, ADMIN | Invite / add member |
+| `PATCH` | `/organizations/:id/members/:userId` | Yes | OWNER, ADMIN | Update member role |
+| `DELETE` | `/organizations/:id/members/:userId` | Yes | OWNER, ADMIN | Remove member |
+
+### Document Management (`/api/v1/documents`)
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| `POST` | `/documents/upload` | Yes | Upload document (asynchronous processing) |
+| `GET` | `/documents` | Yes | List tenant documents (paginated) |
+| `GET` | `/documents/:id` | Yes | Get document status & metadata |
+| `DELETE` | `/documents/:id` | Yes | Delete document, chunks & invalidate cache |
+
+### Search & RAG (`/api/v1/search`, `/api/v1/query`, `/api/v1/conversations`)
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| `POST` | `/search` | Yes | Raw semantic vector similarity search |
+| `POST` | `/query` | Yes | Advanced RAG question answering |
+| `POST` | `/conversations` | Yes | Create conversational thread |
+| `GET` | `/conversations` | Yes | List conversation threads |
+| `POST` | `/conversations/:id/messages` | Yes | Send message in multi-turn conversation |
+
+### RAG Evaluation Subsystem (`/api/v1/evaluations`)
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| `POST` | `/evaluations/datasets` | Yes | Create evaluation QA dataset |
+| `GET` | `/evaluations/datasets` | Yes | List tenant evaluation datasets |
+| `GET` | `/evaluations/datasets/:id` | Yes | Get dataset & test cases |
+| `POST` | `/evaluations/datasets/:id/cases` | Yes | Add test cases to dataset |
+| `POST` | `/evaluations/runs` | Yes | Trigger evaluation run (`async: true` for BullMQ) |
+| `GET` | `/evaluations/runs/:id` | Yes | Get run summary & aggregated metrics |
+| `GET` | `/evaluations/runs/:id/results` | Yes | Get itemized evaluation case scores |
+| `POST` | `/evaluations/benchmark` | Yes | Run comparative benchmark (Baseline vs Advanced RAG) |
+
+---
+
+## Getting Started
 
 ### Prerequisites
-
-- Node.js 18+
-- PostgreSQL 14+
+* **Node.js**: v18+ (v22 recommended)
+* **PostgreSQL**: v14+ with `pgvector` extension enabled
+* **Redis**: v6+ (for caching, rate limiting, and BullMQ queues)
 
 ### Installation
 
 ```bash
-git clone <repo-url>
+# 1. Clone repository
+git clone https://github.com/Dwarkesh2005/DocQuery.git
 cd DocQuery
+
+# 2. Install dependencies
 npm install
-```
 
-### Environment Variables
-
-Copy `.env.example` to `.env` and configure:
-
-```bash
+# 3. Configure environment
 cp .env.example .env
 ```
 
-| Variable              | Description                        | Example                    |
-|-----------------------|------------------------------------|----------------------------|
-| `DATABASE_URL`        | PostgreSQL connection string       | `postgresql://user:pass@localhost:5432/docquery` |
-| `JWT_ACCESS_SECRET`   | Access token signing secret (16+ chars) | Random string         |
-| `JWT_REFRESH_SECRET`  | Refresh token signing secret (16+ chars) | Random string        |
-| `JWT_ACCESS_EXPIRES_IN` | Access token lifetime            | `15m`                      |
-| `JWT_REFRESH_EXPIRES_IN` | Refresh token lifetime          | `7d`                       |
-| `PORT`                | Server port                        | `3000`                     |
-| `NODE_ENV`            | Environment                        | `development`              |
-| `BCRYPT_SALT_ROUNDS`  | bcrypt cost factor                 | `12`                       |
-
-### Database Setup
+### Database Migration & Prisma Client
 
 ```bash
-# Run migrations
-npx prisma migrate dev
+# Run database schema push / migrations
+npx prisma db push
 
 # Generate Prisma client
 npx prisma generate
-
-# View database (optional)
-npx prisma studio
 ```
 
-### Start Development Server
+### Start Application
 
 ```bash
+# Development mode with hot-reload
 npm run dev
+
+# Production mode
+npm start
 ```
 
-### Run Tests
+### Running Automated Tests
 
 ```bash
+# Run all 35 test suites
 npm test
+
+# Run tests in band (recommended for clean DB teardown)
+npx jest --runInBand
 ```
 
-## API Endpoints
+---
 
-All endpoints are prefixed with `/api/v1`.
+## Test Verification
 
-### Authentication
-
-| Method | Endpoint              | Auth | Description                        |
-|--------|-----------------------|------|------------------------------------|
-| POST   | `/auth/register`      | No   | Register new user                  |
-| POST   | `/auth/login`         | No   | Login with credentials             |
-| POST   | `/auth/refresh`       | No   | Refresh access token               |
-| POST   | `/auth/logout`        | Yes  | Revoke refresh token               |
-| GET    | `/auth/me`            | Yes  | Get current user with orgs         |
-
-### Organizations
-
-| Method | Endpoint              | Auth | Description                        |
-|--------|-----------------------|------|------------------------------------|
-| POST   | `/organizations`      | Yes  | Create organization                |
-| GET    | `/organizations`      | Yes  | List user's organizations          |
-| GET    | `/organizations/:id`  | Yes  | Get organization details           |
-
-### Members
-
-| Method | Endpoint                                    | Auth | Role           | Description          |
-|--------|---------------------------------------------|------|----------------|----------------------|
-| GET    | `/organizations/:id/members`                | Yes  | Any member     | List members         |
-| POST   | `/organizations/:id/members`                | Yes  | OWNER, ADMIN   | Add member           |
-| PATCH  | `/organizations/:id/members/:userId`        | Yes  | OWNER, ADMIN   | Update member role   |
-| DELETE | `/organizations/:id/members/:userId`        | Yes  | OWNER, ADMIN   | Remove member        |
-
-### Headers
-
-```
-Authorization: Bearer <access-token>
-X-Organization-Id: <organization-uuid>     # Required for member endpoints
+```text
+Test Suites: 35 passed, 35 total
+Tests:       249 passed, 249 total
+Snapshots:   0 total
+Time:        21.567 s
 ```
 
-## Authentication Flow
-
-```
-Register/Login → Access Token (15m) + Refresh Token (7d, DB-persisted)
-                     │                        │
-                     │                        ├─ POST /auth/refresh → New Access Token
-                     │                        └─ POST /auth/logout  → Token revoked in DB
-                     │
-                     └─ Used in Authorization: Bearer <token>
-```
-
-**Key decisions:**
-- Access tokens are stateless JWTs — short-lived, not revocable until expiry
-- Refresh tokens are persisted in PostgreSQL — revocable on logout
-- Separate signing secrets for access and refresh tokens
-- Token type field prevents type confusion attacks
-
-## Multi-Tenancy Strategy
-
-DocQuery uses **application-level tenant isolation** with a membership verification model:
-
-1. User authenticates → `req.user`
-2. `X-Organization-Id` header read → membership verified in DB
-3. Only if user is a confirmed member → `req.organization` + `req.membership` set
-4. All org-scoped queries use `organizationId` from verified context
-
-**A user can NEVER access another organization's data by changing the `X-Organization-Id` header.** Membership is always verified server-side.
-
-```javascript
-// ✅ Correct — scoped to verified organization
-prisma.document.findMany({
-  where: { organizationId: req.organization.id }
-});
-
-// ❌ Never allowed — unscoped query on tenant data
-prisma.document.findMany();
-```
-
-## RBAC Strategy
-
-| Role   | Permissions                              |
-|--------|------------------------------------------|
-| OWNER  | Full org control, manage all members     |
-| ADMIN  | Manage members (cannot modify OWNER)     |
-| MEMBER | Basic resource access, list members      |
-
-Enforced via `requireRole()` middleware in the route chain:
-
-```
-authenticate → resolveOrganization → requireRole('OWNER', 'ADMIN') → controller
-```
-
-## Security Decisions
-
-- **bcrypt** for password hashing (configurable salt rounds)
-- **Helmet** for HTTP security headers
-- **CORS** for cross-origin control
-- **Zod** for strict input validation on all endpoints
-- **1MB body limit** to prevent payload attacks
-- **Generic auth errors** — login never reveals whether email exists
-- **Cascade deletes** — cleaning up related data on user/org deletion
-- **No secrets in responses** — passwordHash, tokens never leaked
-- **No stack traces in production** — error handler sanitizes output
-
-## Future Phases
-
-| Phase | Feature                              | Status    |
-|-------|--------------------------------------|-----------|
-| 1     | Authentication & Multi-Tenancy       | ✅ Done   |
-| 2     | Document Upload & Processing         | Planned   |
-| 3     | Text Extraction & Chunking           | Planned   |
-| 4     | Embeddings & Vector Storage          | Planned   |
-| 5     | Semantic Search & RAG                | Planned   |
-| 6     | Conversations & Usage Tracking       | Planned   |
+---
 
 ## License
 

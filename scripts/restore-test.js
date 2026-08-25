@@ -41,7 +41,7 @@ async function verifyRestoreProcedure() {
   try {
     fs.unlinkSync(backupPath);
     if (fs.existsSync(backupDir)) {
-      fs.rmdirSync(backupDir, { recursive: true });
+      fs.rmSync(backupDir, { recursive: true, force: true });
     }
   } catch (_) {}
 

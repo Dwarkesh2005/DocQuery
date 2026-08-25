@@ -60,6 +60,13 @@ if (env.NODE_ENV !== 'test') {
 // ── Health Check Routes (unversioned, no rate limiting) ──
 app.use('/health', healthRoutes);
 
+// ── Prometheus Metrics Endpoint ──
+const { prometheusService } = require('./services/prometheus.service');
+app.get('/metrics', (_req, res) => {
+  res.set('Content-Type', 'text/plain; version=0.0.4; charset=utf-8');
+  res.send(prometheusService.getMetrics());
+});
+
 // ── Swagger Documentation (non-production) ──
 if (env.NODE_ENV !== 'production') {
   setupSwagger(app);

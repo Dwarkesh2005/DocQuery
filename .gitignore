@@ -48,9 +48,13 @@ temp/
 *.tmp
 scratch/
 
-# Local & Internal Scripts
+# Local, Interview Handbooks & Internal Scripts
 .local/
-generate-handbook-pdf.js
+*interview*
+*handbook*
+*.pdf
+generate-*.js
+
 
 # IDE & Editor Configurations
 .vscode/

@@ -1,34 +1,33 @@
 const { Router } = require('express');
 const { prisma } = require('../../config/database');
 const { isRedisReady, getRedisClient } = require('../../config/redis');
+const { metricsService } = require('../../services/metrics.service');
+const { prometheusService } = require('../../services/prometheus.service');
 
 const router = Router();
 
 // ============================================================
-// Health Check Routes
+// Health & Observability Routes
+// Phase 10: Production Deployment, SRE & Reliability
 // ============================================================
 
 /**
- * GET /health — Liveness Probe
- * Is the process alive and responding to HTTP?
- * Does NOT check external dependencies.
+ * GET /health/live — Liveness Probe
+ * Lightweight process check. Answers: Is the process alive?
+ * Does NOT query external databases or Redis.
  */
-router.get('/', (_req, res) => {
+router.get('/live', (_req, res) => {
   res.status(200).json({
-    success: true,
-    data: {
-      status: 'healthy',
-      timestamp: new Date().toISOString(),
-      uptime: Math.floor(process.uptime()),
-      version: '0.2.0',
-    },
+    status: 'ok',
+    uptime: Math.floor(process.uptime()),
+    timestamp: new Date().toISOString(),
   });
 });
 
 /**
  * GET /health/ready — Readiness Probe
- * Can the application actually serve traffic?
- * Checks PostgreSQL and Redis connectivity.
+ * Answers: Can this instance accept customer traffic?
+ * Validates connectivity to PostgreSQL and Redis.
  */
 router.get('/ready', async (_req, res) => {
   const checks = {};
@@ -46,7 +45,7 @@ router.get('/ready', async (_req, res) => {
     isReady = false;
     checks.database = {
       status: 'unhealthy',
-      error: 'Connection failed',
+      error: 'Database connection failed',
     };
   }
 
@@ -60,22 +59,21 @@ router.get('/ready', async (_req, res) => {
         latencyMs: Date.now() - redisStart,
       };
     } else {
-      // Redis not ready but not critical — degraded mode
       checks.redis = {
         status: 'degraded',
-        error: 'Not connected',
+        error: 'Redis not ready',
       };
     }
-  } catch {
+  } catch (error) {
     checks.redis = {
       status: 'unhealthy',
-      error: 'Ping failed',
+      error: 'Redis ping failed',
     };
   }
 
-  const status = isReady ? 200 : 503;
+  const statusCode = isReady ? 200 : 503;
 
-  res.status(status).json({
+  res.status(statusCode).json({
     success: isReady,
     data: {
       status: isReady ? 'ready' : 'not_ready',
@@ -85,11 +83,39 @@ router.get('/ready', async (_req, res) => {
   });
 });
 
-const { metricsService } = require('../../services/metrics.service');
+/**
+ * GET /health — Detailed Health Check
+ * Answers: Comprehensive system status and uptime.
+ */
+router.get('/', async (_req, res) => {
+  let dbStatus = 'unknown';
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+    dbStatus = 'healthy';
+  } catch {
+    dbStatus = 'unhealthy';
+  }
+
+  const redisStatus = isRedisReady() ? 'healthy' : 'degraded';
+  const overallHealthy = dbStatus === 'healthy';
+
+  res.status(overallHealthy ? 200 : 503).json({
+    success: overallHealthy,
+    data: {
+      status: overallHealthy ? 'healthy' : 'unhealthy',
+      version: process.env.APP_VERSION || '0.2.0',
+      uptime: Math.floor(process.uptime()),
+      timestamp: new Date().toISOString(),
+      dependencies: {
+        database: dbStatus,
+        redis: redisStatus,
+      },
+    },
+  });
+});
 
 /**
- * GET /health/metrics — Observability & Telemetry Metrics
- * Returns aggregated application metrics across HTTP, RAG, LLM, Embeddings, and Workers.
+ * GET /health/metrics — JSON Telemetry Metrics
  */
 router.get('/metrics', (_req, res) => {
   const metrics = metricsService.getSummary();
@@ -100,4 +126,3 @@ router.get('/metrics', (_req, res) => {
 });
 
 module.exports = router;
-

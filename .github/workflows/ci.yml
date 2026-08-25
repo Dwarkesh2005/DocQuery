@@ -1,8 +1,9 @@
 # ============================================================
-# DocQuery — CI Pipeline
+# DocQuery — Production CI Pipeline
+# Phase 10: Production Deployment, SRE & Reliability
 # ============================================================
 # Runs on every push/PR to main branch.
-# Steps: Install → Lint → Test → Build Validation
+# Pipeline: Checkout → Dependencies → Prisma Validate & Deploy → Lint → Tests → Restore Verification → Docker Build → Security Audit
 
 name: CI
 
@@ -51,29 +52,38 @@ jobs:
           --health-retries 5
 
     steps:
-      - name: Checkout
+      - name: Checkout Source Code
         uses: actions/checkout@v4
 
-      - name: Setup Node.js
+      - name: Setup Node.js Environment
         uses: actions/setup-node@v4
         with:
-          node-version: '24'
+          node-version: '22'
           cache: 'npm'
 
-      - name: Install dependencies
+      - name: Install Dependencies
         run: npm ci
 
-      - name: Generate Prisma client
+      - name: Validate Prisma Schema
+        run: npx prisma validate
+
+      - name: Generate Prisma Client
         run: npx prisma generate
 
-      - name: Run database migrations
+      - name: Apply Database Migrations
         run: npx prisma migrate deploy
 
-      - name: Lint
+      - name: Lint Verification
         run: npm run lint
 
-      - name: Run tests
-        run: npm test
+      - name: Run Full Automated Test Suite (Phases 1-10)
+        run: npx jest --runInBand
 
-      - name: Validate Docker build
+      - name: Verify Disaster Recovery Restore Procedure
+        run: node scripts/restore-test.js
+
+      - name: Multi-Stage Production Docker Build
         run: docker build -t docquery:ci .
+
+      - name: Security Vulnerability Audit
+        run: npm audit --audit-level=critical

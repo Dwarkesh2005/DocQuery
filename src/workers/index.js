@@ -40,6 +40,8 @@ function createAuditWorker() {
     },
   );
 
+  const { deadLetterQueueService } = require('./dlq.service');
+
   worker.on('failed', (job, error) => {
     logger.error({
       jobId: job?.id,
@@ -49,6 +51,18 @@ function createAuditWorker() {
       maxAttempts: job?.opts?.attempts,
       error: error.message,
     }, 'Audit job failed');
+
+    if (job && job.attemptsMade >= (job.opts?.attempts || 1)) {
+      deadLetterQueueService.captureFailure({
+        queueName: QUEUE_NAMES.AUDIT,
+        jobId: job.id,
+        jobName: job.name,
+        organizationId: job.data?.organizationId,
+        data: job.data,
+        error: error.message,
+        attempts: job.attemptsMade,
+      });
+    }
   });
 
   worker.on('completed', (job) => {
@@ -141,6 +155,18 @@ function createDocumentWorker() {
       maxAttempts: job?.opts?.attempts,
       error: error.message,
     }, 'Document job failed');
+
+    if (job && job.attemptsMade >= (job.opts?.attempts || 1)) {
+      deadLetterQueueService.captureFailure({
+        queueName: QUEUE_NAMES.DOCUMENT,
+        jobId: job.id,
+        jobName: job.name,
+        organizationId: job.data?.organizationId,
+        data: { documentId: job.data?.documentId },
+        error: error.message,
+        attempts: job.attemptsMade,
+      });
+    }
   });
 
   worker.on('completed', (job) => {

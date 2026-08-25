@@ -98,9 +98,14 @@ function errorHandler(err, _req, res, _next) {
 
   // ── Unknown / Unhandled Errors ──
   // Log full details server-side, return generic message to client
-  if (env.NODE_ENV !== 'test') {
-    logger.error({ err, requestId: _req.id }, 'Unhandled error');
-  }
+  const { errorTrackerService } = require('../services/error-tracker.service');
+  errorTrackerService.captureError(err, {
+    requestId: _req.id,
+    organizationId: _req.organization?.id,
+    userId: _req.user?.id,
+    route: _req.originalUrl,
+    method: _req.method,
+  });
 
   return res.status(500).json({
     success: false,

@@ -6,13 +6,29 @@ dotenv.config();
 
 // ============================================================
 // Environment Variable Schema
+// Phase 10: Production Deployment, SRE & Reliability
 // ============================================================
 // Zod-validated environment configuration.
-// Fails fast at startup if required variables are missing.
+// Fails fast at startup if required variables are missing or insecure.
 
 const envSchema = z.object({
   // Database
   DATABASE_URL: z.string().min(1, 'DATABASE_URL is required'),
+  DATABASE_POOL_MIN: z
+    .string()
+    .default('2')
+    .transform((val) => parseInt(val, 10))
+    .pipe(z.number().min(1)),
+  DATABASE_POOL_MAX: z
+    .string()
+    .default('20')
+    .transform((val) => parseInt(val, 10))
+    .pipe(z.number().min(2)),
+  DATABASE_TIMEOUT_MS: z
+    .string()
+    .default('10000')
+    .transform((val) => parseInt(val, 10))
+    .pipe(z.number().positive()),
 
   // JWT
   JWT_ACCESS_SECRET: z.string().min(16, 'JWT_ACCESS_SECRET must be at least 16 characters'),
@@ -20,15 +36,22 @@ const envSchema = z.object({
   JWT_ACCESS_EXPIRES_IN: z.string().default('15m'),
   JWT_REFRESH_EXPIRES_IN: z.string().default('7d'),
 
-  // Server
+  // Server & Host
   PORT: z
     .string()
     .default('3000')
     .transform((val) => parseInt(val, 10))
     .pipe(z.number().positive()),
+  HOST: z.string().default('0.0.0.0'),
   NODE_ENV: z
     .enum(['development', 'production', 'test'])
     .default('development'),
+  CORS_ORIGIN: z.string().default('*'),
+  SHUTDOWN_TIMEOUT_MS: z
+    .string()
+    .default('15000')
+    .transform((val) => parseInt(val, 10))
+    .pipe(z.number().positive()),
 
   // bcrypt
   BCRYPT_SALT_ROUNDS: z
@@ -39,6 +62,11 @@ const envSchema = z.object({
 
   // Redis
   REDIS_URL: z.string().default('redis://localhost:6379'),
+  REDIS_RETRY_STRATEGY_MAX_MS: z
+    .string()
+    .default('3000')
+    .transform((val) => parseInt(val, 10))
+    .pipe(z.number().positive()),
 
   // Rate Limiting (requests / window in seconds or ms)
   RATE_LIMIT_AUTH_MAX: z
@@ -184,19 +212,34 @@ const envSchema = z.object({
     .default('STRICT'),
 });
 
-function loadEnv() {
-  const result = envSchema.safeParse(process.env);
+/**
+ * Validate raw environment variables with secret redaction on error.
+ * @param {object} [raw=process.env]
+ * @returns {object} Validated environment object
+ */
+function validateEnv(raw = process.env) {
+  const result = envSchema.safeParse(raw);
 
   if (!result.success) {
     const formatted = result.error.format();
+    const cleanError = JSON.stringify(formatted, (key, value) => {
+      if (/secret|key|password|token/i.test(key) && typeof value === 'string') {
+        return '[REDACTED]';
+      }
+      return value;
+    }, 2);
+
     console.error('❌ Invalid environment variables:');
-    console.error(JSON.stringify(formatted, null, 2));
-    process.exit(1);
+    console.error(cleanError);
+    if (process.env.NODE_ENV !== 'test') {
+      process.exit(1);
+    }
+    throw new Error('Environment variable validation failed');
   }
 
   return result.data;
 }
 
-const env = loadEnv();
+const env = validateEnv(process.env);
 
-module.exports = { env };
+module.exports = { env, validateEnv, envSchema };
